@@ -2,7 +2,9 @@ import numpy as np
 import torch
 from torch import nn
 
-from sktensor import dtensor, tucker
+# from sktensor import dtensor, tucker #互換性を持つため、ライブラリを変更
+from tensorly.decomposition import tucker
+import tensorly as tl
 from .rank_selection import estimate_rank_for_compression_rate
 
 
@@ -95,20 +97,41 @@ class Tucker2DecomposedLayer():
         return weight, bias
 
     def get_tucker_factors(self):
-        weights = dtensor(self.weight.cpu())
-        if self.bias is not None:
-            bias = self.bias.cpu()
-        else:
-            bias = self.bias
+        # weights = dtensor(self.weight.cpu())
+            
+        # if self.bias is not None:
+        #     bias = self.bias.cpu()
+        # else:
+        #     bias = self.bias
 
-        core, (U_cout, U_cin, U_dd) = tucker.hooi(
-            weights, [self.ranks[0], self.ranks[1], weights.shape[-1]], init='nvecs')
+        # core, (U_cout, U_cin, U_dd) = tucker.hooi(
+        #     weights, [self.ranks[0], self.ranks[1], weights.shape[-1]], init='nvecs')
 
-        core = core.dot(U_dd.T)
+        # core = core.dot(U_dd.T)
 
-        w_cin = np.array(U_cin)
-        w_core = np.array(core)
-        w_cout = np.array(U_cout)
+        # w_cin = np.array(U_cin)
+        # w_core = np.array(core)
+        # w_cout = np.array(U_cout)
+
+        print("weight shape:", self.weight.shape)
+        print("weight_np shape:", weight_np.shape)
+        print("ranks:", self.ranks)
+        print("core shape:", core.shape)
+        print("factors shapes:", [f.shape for f in factors])
+        
+        weight_np = self.weight.cpu().numpy()
+        core, factors = tucker(weight_np, ranks=[self.ranks[0], self.ranks[1], weight_np.shape[-1]], init='svd')
+        
+        # tensorlyの戻り値は core と list of factor matrices
+        U_cout, U_cin, U_dd = factors
+
+        core = np.tensordot(core, U_dd.T, axes=([2],[0]))  # core.dot(U_dd.T) に相当
+
+        # numpy配列をtorch.Tensorに変換
+        w_cin = U_cin
+        w_core = core
+        w_cout = U_cout
+        
 
         if '__getitem__' in dir(self.layer):
             w_cin_old = self.layer[0].weight.cpu().data
@@ -128,4 +151,4 @@ class Tucker2DecomposedLayer():
         w_cout = torch.FloatTensor(np.reshape(
             w_cout, [self.cout, self.ranks[0], 1, 1])).contiguous()
 
-        return [w_cin, w_core,  w_cout], [None, None,  bias]
+        return [w_cin, w_core,  w_cout], [None, None,  self.bias]
