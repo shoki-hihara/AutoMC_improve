@@ -1,4 +1,8 @@
 import sys, os
+
+# 実行ファイル(run_Compression_Methods.py)の位置から見てprune_C1.pyがあるディレクトリを追加
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import prune_C1
 import prune_C2
 import prune_C3
