@@ -1,7 +1,7 @@
 import os
 import sys
 
-# この2行を追加
+# この2行を追加（パス解決用）
 cpath = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if cpath not in sys.path:
     sys.path.insert(0, cpath)
@@ -10,15 +10,16 @@ import train  # ←これで必ず読み込めるようになる
 
 
 def t(data_name, arch_name, epochs, save_path=None, pretrained_model_path=None):
-    # データ設定
+    # データ設定（Colab ローカルに保存）
     data = {
-        'dir': './data',
+        'dir': '/content/data',
         'name': data_name
     }
 
-    # 保存先設定
+    # 保存先設定（Colab ローカルに保存）
     if save_path is None:
-        save_path = './snapshots/{}/{}/train/'.format(data_name, arch_name)
+        save_path = '/content/snapshots/{}/{}/train/'.format(data_name, arch_name)
+    os.makedirs(save_path, exist_ok=True)
 
     # モデル設定
     if pretrained_model_path:
@@ -43,8 +44,3 @@ if __name__ == '__main__':
 
     # 実行
     t(data_name, arch_name, epochs, save_path, pretrained_model_path)
-
-# python scripts/pretrain.py mini_cifar100 vgg16 200 \
-    # /content/drive/MyDrive/AutoMC_models/cifar100/vgg16/mini_retrain \
-    # /content/drive/MyDrive/AutoMC_models/cifar100/vgg16/train/best.pth
-
