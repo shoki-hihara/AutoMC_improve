@@ -36,3 +36,8 @@ if __name__ == '__main__':
 
     # 実行
     t(data_name, arch_name, epochs, save_path, pretrained_model_path)
+
+# python scripts/pretrain.py mini_cifar100 vgg16 200 \
+    # /content/drive/MyDrive/AutoMC_models/cifar100/vgg16/mini_retrain \
+    # /content/drive/MyDrive/AutoMC_models/cifar100/vgg16/train/best.pth
+
