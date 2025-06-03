@@ -22,7 +22,7 @@
 
   "max_calg_num": 10,
   "task_name": "resnet56+mini_cifar10+0.3",
-  "task_info": "{'class_num': 10, 'image_size': 32, 'image_channel': 3, 'avg_data_num_per_class': 5000, 'top1_acc': 0.93, 'parameter_amount': 850000, 'flops_amount': 125000000}", 
+  "task_info": "class_num=10,image_size=32,image_channel=3,avg_data_num_per_class=5000,top1_acc=0.93,parameter_amount=850000,flops_amount=125000000",
   "pretrain_epochs": 50,
 
   "automl_search_time(h)": 120
