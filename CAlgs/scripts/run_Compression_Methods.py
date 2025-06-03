@@ -19,9 +19,13 @@ def run(data_name, arch_name, alg, rate, data_root, model_root, output_root):
         'dir': os.path.join(data_root),
         'name': data_name
     }
+    # arch = {
+    #     'dir': os.path.join(model_root, data_name, f"{arch_name}.pth.tar"),
+    #     'name': arch_name
+    # }
     arch = {
-        'dir': os.path.join(model_root, data_name, f"{arch_name}.pth.tar"),
-        'name': arch_name
+    'dir': model_root,  # ここは既にフルパスなので、そのまま渡す
+    'name': arch_name
     }
     save_dir = os.path.join(output_root, data_name, arch_name, str(rate))
 
