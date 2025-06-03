@@ -6,6 +6,9 @@ import prune_C4
 import prune_C5
 import prune_C7
 
+# 実行ファイル(run_Compression_Methods.py)の位置から見てprune_C1.pyがあるディレクトリを追加
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 def run(data_name, arch_name, alg, rate, data_root, model_root, output_root):
     # ディレクトリ設定（Google Drive含む任意パス）
     data = {
