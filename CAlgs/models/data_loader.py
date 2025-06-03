@@ -88,9 +88,10 @@ def load_mini_data(data_dir, batch_size=64, workers=4, return_data=False):
         return mini_train_loader, mini_val_loader
 
 def get_mini_data_dir(data_name, arch_name, rate=0.1):
-    base_dir = os.path.abspath(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-    data_dir = base_dir+'/data/mini_dataset/{}/{}/{}/'.format(data_name, arch_name, rate)
-    return data_dir
+    # base_dir = os.path.abspath(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+    # data_dir = base_dir+'/data/mini_dataset/{}/{}/{}/'.format(data_name, arch_name, rate)
+    # return data_dir
+    return f'/content/drive/MyDrive/学習/大学院/特別研究/AutoMC/AutoMC_mini_datasets/{data_name}/{arch_name}/' #Googleドライブ対応
 
 def get_num_classes(data_name):
     if data_name == 'cifar10' or data_name == 'mini_cifar10':
