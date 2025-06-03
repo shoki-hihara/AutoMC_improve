@@ -1,6 +1,13 @@
-import sys, os
-sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
-import train
+import os
+import sys
+
+# この2行を追加
+cpath = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if cpath not in sys.path:
+    sys.path.insert(0, cpath)
+
+import train  # ←これで必ず読み込めるようになる
+
 
 def t(data_name, arch_name, epochs, save_path=None, pretrained_model_path=None):
     # データ設定
