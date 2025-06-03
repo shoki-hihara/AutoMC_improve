@@ -1,5 +1,5 @@
-import os
-import sys
+import sys, os
+sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 import train
 
 def t(data_name, arch_name, epochs, save_path=None, pretrained_model_path=None):
