@@ -27,27 +27,30 @@ if __name__ == '__main__':
 	with open(args.config_path, 'r') as f:
 		config = json.load(f)
 
-	# task_info が引数として渡されていれば（文字列）、辞書に変換して上書き
+	# task_info が CLI引数として渡されていれば辞書に変換して config にセット
 	if args.task_info:
-		config["task_info"] = json.loads(args.task_info)
-	    
+		task_info_dict = json.loads(args.task_info)
+	else:
+		task_info_dict = config.get("task_info", {})
+
+	# 以降の呼び出しで、辞書の task_info_dict を渡すようにする
 	if args.automl_method == "random":
-		AutoMLRandom(args.config_path, args.task_name, args.task_info).main()
+		AutoMLRandom(args.config_path, args.task_name, task_info_dict).main()
 	elif args.automl_method == "random2":
-		AutoMLRandom2(args.config_path, args.task_name, args.task_info).main()
+		AutoMLRandom2(args.config_path, args.task_name, task_info_dict).main()
 	elif args.automl_method == "evolution":
-		AutoMLEvolution(args.config_path, args.task_name, args.task_info).main()
+		AutoMLEvolution(args.config_path, args.task_name, task_info_dict).main()
 	elif args.automl_method == "rl":
-		AutoMLRl(args.config_path, args.task_name, args.task_info).main()
+		AutoMLRl(args.config_path, args.task_name, task_info_dict).main()
 	elif args.automl_method == "our":
-		AutoMLOur(args.config_path, args.task_name, args.task_info).main()
+		AutoMLOur(args.config_path, args.task_name, task_info_dict).main()
 	elif args.automl_method == "our_exp":
-		AutoMLOur_AblationEXP(args.config_path, args.task_name, args.task_info).main()
+		AutoMLOur_AblationEXP(args.config_path, args.task_name, task_info_dict).main()
 	elif args.automl_method == "our_kg":
-		AutoMLOur_AblationKG(args.config_path, args.task_name, args.task_info).main()
+		AutoMLOur_AblationKG(args.config_path, args.task_name, task_info_dict).main()
 	elif args.automl_method == "our_kmodel":
-		AutoMLOur_AblationKModel(args.config_path, args.task_name, args.task_info).main()
+		AutoMLOur_AblationKModel(args.config_path, args.task_name, task_info_dict).main()
 	elif args.automl_method == "our_pmodel":
-		AutoMLOur_AblationPModel(args.config_path, args.task_name, args.task_info).main()
+		AutoMLOur_AblationPModel(args.config_path, args.task_name, task_info_dict).main()
 	elif args.automl_method == "our_space":
-		AutoMLOur_AblationSpace(args.config_path, args.task_name, args.task_info).main()
+		AutoMLOur_AblationSpace(args.config_path, args.task_name, task_info_dict).main()
