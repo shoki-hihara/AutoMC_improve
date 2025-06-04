@@ -191,15 +191,16 @@ class AutoMLOur(object):
 	# 		new_item[name] = value
 	# 	return new_item
 
-	def get_real_taskinfo(self, taskinfostring):
-	    return eval(taskinfostring)
+	# def get_real_taskinfo(self, taskinfostring):
+	#     return eval(taskinfostring)
 
 	def get_task_array(self, config):
 		# task_info: data_info.extend(model_info)
 		# data_info = [class_num, image_size, image_channel, avg_data_num_per_class]
 		# model_info = [top1_acc, parameter_amount, flops_amount]
 		#print(config["task_info"])
-		task_info = self.get_real_taskinfo(config["task_info"])
+		# task_info = self.get_real_taskinfo(config["task_info"])
+		task_info = config["task_info"]
 		#print(task_info)
 		task_array = np.array([task_info["class_num"], task_info["image_size"], task_info["image_channel"], 
 					task_info["avg_data_num_per_class"], task_info["top1_acc"], task_info["parameter_amount"],
