@@ -23,6 +23,13 @@ parser.add_argument('--task_info', '--ti', type=str, default="", help='the task 
 args = parser.parse_args()
 
 if __name__ == '__main__':
+	with open(args.config_path, 'r') as f:
+		config = json.load(f)
+
+	# task_info が引数として渡されていれば（文字列）、辞書に変換して上書き
+	if args.task_info:
+		config["task_info"] = json.loads(args.task_info)
+	    
 	if args.automl_method == "random":
 		AutoMLRandom(args.config_path, args.task_name, args.task_info).main()
 	elif args.automl_method == "random2":
