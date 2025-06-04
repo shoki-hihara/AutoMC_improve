@@ -176,20 +176,23 @@ class AutoMLOur(object):
 		cstrategy_embeddings = self.k_model.main()
 		return cstrategy_embeddings
 
+	# def get_real_taskinfo(self, taskinfostring):
+	# 	new_item = {}
+	# 	items = taskinfostring[1:len(taskinfostring)-1].split(", ")
+	# 	for i in range(len(items)):
+	# 		content = items[i].split(": ")
+	# 		name = content[0]
+	# 		if "'" in name:
+	# 			name = eval(name)
+	# 		try:
+	# 			value = eval(content[1])
+	# 		except:
+	# 			value = content[1]
+	# 		new_item[name] = value
+	# 	return new_item
+
 	def get_real_taskinfo(self, taskinfostring):
-		new_item = {}
-		items = taskinfostring[1:len(taskinfostring)-1].split(", ")
-		for i in range(len(items)):
-			content = items[i].split(": ")
-			name = content[0]
-			if "'" in name:
-				name = eval(name)
-			try:
-				value = eval(content[1])
-			except:
-				value = content[1]
-			new_item[name] = value
-		return new_item
+	    return eval(taskinfostring)
 
 	def get_task_array(self, config):
 		# task_info: data_info.extend(model_info)
