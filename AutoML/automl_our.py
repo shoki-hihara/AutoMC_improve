@@ -195,19 +195,11 @@ class AutoMLOur(object):
 	#     return eval(taskinfostring)
 
 	def get_task_array(self, config):
-		# task_info: data_info.extend(model_info)
-		# data_info = [class_num, image_size, image_channel, avg_data_num_per_class]
-		# model_info = [top1_acc, parameter_amount, flops_amount]
-		#print(config["task_info"])
-		# task_info = self.get_real_taskinfo(config["task_info"])
-		#print(task_info)
-
-		# task_infoが辞書であればそのまま使う
 		if isinstance(config["task_info"], str):
 			task_info = json.loads(config["task_info"])
-    		else:
+		else:
 			task_info = config["task_info"]
-
+		
 		task_array = np.array([
 			task_info["class_num"],
 			task_info["image_size"],
@@ -217,9 +209,9 @@ class AutoMLOur(object):
 			task_info["parameter_amount"],
 			task_info["flops_amount"]
 		])
-    		task_array = task_array / self.task_info_norm_value
-    		self.logger.info('* task_array: %s, task_info_norm_value: %s', str(task_array), str(self.task_info_norm_value))
-    		return task_array
+		task_array = task_array / self.task_info_norm_value
+		self.logger.info('* task_array: %s, task_info_norm_value: %s', str(task_array), str(self.task_info_norm_value))
+		return task_array
 
 
 	def get_next_candidates(self):
