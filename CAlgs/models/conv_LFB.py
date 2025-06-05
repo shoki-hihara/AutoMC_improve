@@ -10,17 +10,21 @@ class conv(nn.Module):
         self.kernel_size = kernel_size
         self.stride = stride
         self.group = group
-        self.n_basis = int(in_channels // group * times)
         self.basis_size = in_channels // group
+        self.n_basis = max(1, int(self.basis_size * times))  # 修正: 0チャネルを防ぐ
         self.basis_weight = nn.Parameter(nn.init.kaiming_uniform_(torch.Tensor(self.n_basis, self.basis_size, 3, 3)))
         self.basis_bias = nn.Parameter(torch.zeros(self.n_basis)) if bias else None
 
     def forward(self, x):
         if self.group == 1:
             x = F.conv2d(input=x, weight=self.basis_weight, bias=self.basis_bias,
-                         stride=self.stride, padding=self.kernel_size//2)
+                         stride=self.stride, padding=self.kernel_size // 2)
         else:
-            x = torch.cat([F.conv2d(input=xi, weight=self.basis_weight, bias=self.basis_bias, stride=self.stride, padding=self.kernel_size//2) for xi in torch.split(x, self.basis_size, dim=1)], dim=1)
+            x = torch.cat([
+                F.conv2d(input=xi, weight=self.basis_weight, bias=self.basis_bias,
+                         stride=self.stride, padding=self.kernel_size // 2)
+                for xi in torch.split(x, self.basis_size, dim=1)
+            ], dim=1)
         return x
 
     def __repr__(self):
@@ -32,9 +36,13 @@ class conv(nn.Module):
 class conv_LFB(nn.Module):
     def __init__(self, in_channels, out_channels, group, times, stride=1, bias=True):
         super(conv_LFB, self).__init__()
-        assert in_channels % group == 0, "in_channels {} must be able to divide group {}.".format(in_channels, group)
-        modules = [conv(in_channels, kernel_size=3, group=group, times=times, stride=stride, bias=bias)]
-        modules.append(nn.Conv2d(int(times * in_channels // group * group), out_channels, kernel_size=1, stride=1, bias=bias))
+        assert in_channels % group == 0, "in_channels {} must be divisible by group {}.".format(in_channels, group)
+        basis_conv = conv(in_channels, kernel_size=3, group=group, times=times, stride=stride, bias=bias)
+        out_channels_intermediate = basis_conv.n_basis * group
+        modules = [
+            basis_conv,
+            nn.Conv2d(out_channels_intermediate, out_channels, kernel_size=1, stride=1, bias=bias)
+        ]
         self.conv = nn.Sequential(*modules)
 
     def forward(self, x):
