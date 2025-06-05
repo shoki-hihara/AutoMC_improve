@@ -337,37 +337,50 @@ class AutoMLOur(object):
 	    return next_candidates
 
 
-
 	def get_best_candidate(self, next_candidates):
-		self.logger.info('* get_best_candidate begin')
-		pre_sequences, next_cstrategies, history_scheme_scores = [], [], []
-		for i in range(len(next_candidates)):
-			candidate = next_candidates[i]
-			pre_sequences.append(candidate["pre_sequences"])
-			next_cstrategies.append(candidate["next_cstrategy"])
-			score_info = candidate["score_info"]
-			scheme_score = [score_info[3], score_info[0], score_info[1]] # parameter, acc, compression_rate
-			history_scheme_scores.append(scheme_score)
+	    self.logger.info('* get_best_candidate begin')
+	
+	    if not next_candidates:
+	        self.logger.warning('No next_candidates available.')
+	        return [], []
+	
+	    pre_sequences, next_cstrategies, history_scheme_scores = [], [], []
+	    for i, candidate in enumerate(next_candidates):
+	        pre_sequences.append(candidate["pre_sequences"])
+	        next_cstrategies.append(candidate["next_cstrategy"])
+	        score_info = candidate["score_info"]
+	        scheme_score = [score_info[3], score_info[0], score_info[1]]  # parameter, acc, compression_rate
+	        history_scheme_scores.append(scheme_score)
+	
+	    pre_sequences = np.array(pre_sequences)
+	    next_cstrategies = np.array(next_cstrategies)
+	    history_scheme_scores = np.array(history_scheme_scores)
+	
+	    self.logger.info(f'pre_sequences.shape={pre_sequences.shape}')
+	    self.logger.info(f'next_cstrategies.shape={next_cstrategies.shape}')
+	    self.logger.info(f'history_scheme_scores.shape={history_scheme_scores.shape}')
+	
+	    try:
+	        optimal_scheme_indexs, predicted_optimal_step_scores = self.p_model.main(
+	            pre_sequences, next_cstrategies, history_scheme_scores, self.optimal_num
+	        )
+	    except Exception as e:
+	        self.logger.error(f'Exception in p_model.main: {str(e)}')
+	        return [], []
+	
+	    best_candidates = []
+	    for i, index in enumerate(optimal_scheme_indexs):
+	        try:
+	            best_candidates.append(next_candidates[index])
+	            best_candidates[-1]["predicted_step_scores"] = predicted_optimal_step_scores[i].data.cpu().numpy()
+	        except Exception as e:
+	            self.logger.error(f'Exception while building best_candidates: {str(e)}')
+	            continue
+	
+	    self.logger.info('* get_best_candidate finished')
+	    self.logger.info(f'* best_candidates count: {len(best_candidates)}')
+	    return best_candidates, predicted_optimal_step_scores
 
-		pre_sequences = np.array(pre_sequences)
-		next_cstrategies = np.array(next_cstrategies)
-		history_scheme_scores = np.array(history_scheme_scores)
-
-		#self.logger.info('@ 11 pre_sequences: %s', str(pre_sequences))
-		#self.logger.info('@ 11 next_cstrategies: %s', str(next_cstrategies))
-		#self.logger.info('@ 11 history_scheme_scores: %s', str(history_scheme_scores))
-
-		optimal_scheme_indexs, predicted_optimal_step_scores = self.p_model.main(pre_sequences, next_cstrategies, history_scheme_scores, self.optimal_num)
-		# predicted_optimal_step_scores: flops_decreased_ratio, acc_increased_ratio
-		best_candidates = []
-		for i in range(len(optimal_scheme_indexs)):
-			index = optimal_scheme_indexs[i]
-			best_candidates.append(next_candidates[index])
-			best_candidates[-1]["predicted_step_scores"] = predicted_optimal_step_scores[i].data.cpu().numpy()
-		self.logger.info('* get_best_candidate finished')
-		self.logger.info('* best_candidates: %s', str(best_candidates))
-		self.logger.info('* predicted_optimal_step_scores: %s', str(predicted_optimal_step_scores))
-		return best_candidates, predicted_optimal_step_scores
 
 	def pareto_opt_tell(self, score1, score2):
 		if score1[0] == score2[0] and score1[1] > score2[1]: # 0: acc, 1: compression_rate
