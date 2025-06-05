@@ -203,153 +203,139 @@ class AutoMLOur(object):
 	def get_next_candidates(self):
 	    self.logger.info('* get_next_candidates begin')
 	    next_candidates = []
-	    next_cstrategies = [i for i in range(1, len(self.cstartegies)+1)]
+	    next_cstrategies = [i for i in range(1, len(self.cstartegies) + 1)]
 	
-	    # sample from pareto_history
+	    # ----- sample from pareto_history -----
 	    pareto_num = self.batch_size - int(self.batch_size * self.avg_ratio)
-	    self.pareto_history = sorted(self.pareto_history, key=lambda info: info["pareto_score_value"][0], reverse=True)
+	    self.logger.info('len(pareto_history): %d', len(self.pareto_history))
+	    self.pareto_history = sorted(
+	        self.pareto_history,
+	        key=lambda info: info["pareto_score_value"][0],
+	        reverse=True
+	    )
 	
 	    pareto_history_valid = []
-	    for i in range(len(self.pareto_history)):
-	      applied_source_index = self.pareto_history[i]["source_index"]
-	      if self.history[applied_source_index]["valid"]:
-	        pareto_history_valid.append(self.pareto_history[i])
-	        
+	    for info in self.pareto_history:
+	        source_idx = info["source_index"]
+	        if source_idx < len(self.history) and self.history[source_idx]["valid"]:
+	            pareto_history_valid.append(info)
+	
 	    if len(pareto_history_valid) > 0:
-	      top_pareto_history_valid = max(int(len(pareto_history_valid) * 0.2), 1)
-	      try_num = 0
-	      while pareto_num != 0:
-	        if try_num == 1000:
-	          break
-	        
-	        if random.random() <= 0.5:
-	          applied_pareto_history = random.sample(pareto_history_valid[:top_pareto_history_valid], 1)[0]
+	        top = max(int(len(pareto_history_valid) * 0.2), 1)
+	        try_num = 0
+	        while pareto_num != 0 and try_num < 1000:
+	            try:
+	                info = random.choice(pareto_history_valid[:top] if random.random() <= 0.5 else pareto_history_valid[top:])
+	                source_idx = info["source_index"]
+	                h = self.history[source_idx]
+	                valid_next = h["valid_unselected_next_cstrategy"]
+	                if not valid_next:
+	                    self.logger.warning(f"[pareto] Empty next_cstrategy @ {source_idx}")
+	                    try_num += 1
+	                    continue
 	
-	        else:
-	          if len(pareto_history_valid) == 1:
-	            applied_pareto_history = pareto_history_valid[0]
-	          else:
-	            applied_pareto_history = random.sample(pareto_history_valid[top_pareto_history_valid:], 1)[0]
-	        applied_source_index = applied_pareto_history["source_index"]
+	                candidate = {
+	                    "pre_sequences": list(h["pre_sequences"]),
+	                    "next_cstrategy": [random.choice(valid_next)],
+	                    "score_info": h["score_info"],
+	                    "pre_info": h["pre_info"],
+	                    "source_index": source_idx,
+	                    "predicted_step_scores": [None, None],
+	                    "real_step_scores": [None, None]
+	                }
 	
-	        applied_pre_sequences = self.history[applied_source_index]["pre_sequences"]
-	        applied_valid_unselected_next_cstrategy = self.history[applied_source_index]["valid_unselected_next_cstrategy"]
+	                if candidate not in next_candidates:
+	                    next_candidates.append(candidate)
+	                    pareto_num -= 1
+	            except Exception as e:
+	                self.logger.error(f"[pareto] Exception: {e}")
+	            try_num += 1
 	
-	        if not applied_valid_unselected_next_cstrategy:
-	          self.logger.warning(f"[pareto_history] Empty valid_unselected_next_cstrategy at source_index={applied_source_index}")
-	          try_num += 1
-	          continue
-	
-	        next_cstrategy = random.sample(applied_valid_unselected_next_cstrategy, 1)[0]
-	
-	        candidate = {
-	          "pre_sequences": list(applied_pre_sequences),
-	          "next_cstrategy": [next_cstrategy],
-	          "score_info": self.history[applied_source_index]["score_info"],
-	          "pre_info": self.history[applied_source_index]["pre_info"],
-	          "source_index": applied_source_index,
-	          "predicted_step_scores": [None, None],
-	          "real_step_scores": [None, None]
-	        }
-	      if candidate not in next_candidates:
-	        next_candidates.append(candidate)
-	        pareto_num -= 1
-	
-	      try_num += 1
 	    self.logger.info('* get_next_candidates from pareto_history: %d', len(next_candidates))
 	
-	    # sample from avg_pareto_history
+	    # ----- sample from avg_pareto_history -----
 	    avg_pareto_num = self.batch_size - len(next_candidates)
-	    self.avg_pareto_history = sorted(self.avg_pareto_history, key=lambda info: info["avg_pareto_score_value"][0], reverse=True)
+	    self.logger.info('len(avg_pareto_history): %d', len(self.avg_pareto_history))
+	    self.avg_pareto_history = sorted(
+	        self.avg_pareto_history,
+	        key=lambda info: info["avg_pareto_score_value"][0],
+	        reverse=True
+	    )
 	
 	    avg_pareto_history_valid = []
-	    for i in range(len(self.avg_pareto_history)):
-	      applied_source_index = self.avg_pareto_history[i]["source_index"]
-	      if self.history[applied_source_index]["valid"]:
-	        avg_pareto_history_valid.append(self.avg_pareto_history[i])
+	    for info in self.avg_pareto_history:
+	        source_idx = info["source_index"]
+	        if source_idx < len(self.history) and self.history[source_idx]["valid"]:
+	            avg_pareto_history_valid.append(info)
 	
 	    if len(avg_pareto_history_valid) > 0:
-	      top_avg_pareto_history_valid = max(int(len(avg_pareto_history_valid) * 0.2), 1)
-	      try_num = 0
-	      while avg_pareto_num != 0:
-	        if try_num == 1000:
-	          break
-	        if random.random() <= 0.5:
-	          applied_avg_pareto_history = random.sample(avg_pareto_history_valid[:top_avg_pareto_history_valid], 1)[0]
-	        else:
-	          if len(avg_pareto_history_valid) == 1:
-	            applied_avg_pareto_history = avg_pareto_history_valid[0]
-	          else:
-	            applied_avg_pareto_history = random.sample(avg_pareto_history_valid[top_avg_pareto_history_valid:], 1)[0]
-	        applied_source_index = applied_avg_pareto_history["source_index"]
+	        top = max(int(len(avg_pareto_history_valid) * 0.2), 1)
+	        try_num = 0
+	        while avg_pareto_num != 0 and try_num < 1000:
+	            try:
+	                info = random.choice(avg_pareto_history_valid[:top] if random.random() <= 0.5 else avg_pareto_history_valid[top:])
+	                source_idx = info["source_index"]
+	                h = self.history[source_idx]
+	                valid_next = h["valid_unselected_next_cstrategy"]
+	                if not valid_next:
+	                    self.logger.warning(f"[avg_pareto] Empty next_cstrategy @ {source_idx}")
+	                    try_num += 1
+	                    continue
 	
-	        applied_pre_sequences = self.history[applied_source_index]["pre_sequences"]
-	        applied_valid_unselected_next_cstrategy = self.history[applied_source_index]["valid_unselected_next_cstrategy"]
+	                candidate = {
+	                    "pre_sequences": list(h["pre_sequences"]),
+	                    "next_cstrategy": [random.choice(valid_next)],
+	                    "score_info": h["score_info"],
+	                    "pre_info": h["pre_info"],
+	                    "source_index": source_idx,
+	                    "predicted_step_scores": [None, None],
+	                    "real_step_scores": [None, None]
+	                }
 	
-	        if not applied_valid_unselected_next_cstrategy:
-	          self.logger.warning(f"[avg_pareto_history] Empty valid_unselected_next_cstrategy at source_index={applied_source_index}")
-	          try_num += 1
-	          continue
+	                if candidate not in next_candidates:
+	                    next_candidates.append(candidate)
+	                    avg_pareto_num -= 1
+	            except Exception as e:
+	                self.logger.error(f"[avg_pareto] Exception: {e}")
+	            try_num += 1
 	
-	      next_cstrategy = random.sample(applied_valid_unselected_next_cstrategy, 1)[0]
-	
-	      candidate = {
-	        "pre_sequences": list(applied_pre_sequences),
-	        "next_cstrategy": [next_cstrategy],
-	        "score_info": self.history[applied_source_index]["score_info"],
-	        "pre_info": self.history[applied_source_index]["pre_info"],
-	        "source_index": applied_source_index,
-	        "predicted_step_scores": [None, None],
-	        "real_step_scores": [None, None]
-	      }
-	      if candidate not in next_candidates:
-	        next_candidates.append(candidate)
-	        avg_pareto_num -= 1
-	
-	      try_num += 1
 	    self.logger.info('* get_next_candidates from avg_pareto_history: %d', len(next_candidates))
 	
-	    # sample from history
+	    # ----- sample from history -----
 	    left_num = self.batch_size - len(next_candidates)
-	    history_valid = []
-	    for i in range(len(self.history)):
-	      applied_source_index = self.history[i]["source_index"]
-	      if self.history[applied_source_index]["valid"]:
-	        history_valid.append(self.history[i])
+	    history_valid = [h for h in self.history if h["valid"]]
 	
 	    try_num = 0
-	    while left_num != 0 and try_num < 1000:
-	      applied_history = random.sample(history_valid, 1)[0]
-	      applied_source_index = applied_history["source_index"]
-	      applied_pre_sequences = self.history[applied_source_index]["pre_sequences"]
-	      applied_valid_unselected_next_cstrategy = self.history[applied_source_index]["valid_unselected_next_cstrategy"]
+	    while left_num > 0 and try_num < 1000:
+	        try:
+	            h = random.choice(history_valid)
+	            valid_next = h["valid_unselected_next_cstrategy"]
+	            if not valid_next:
+	                self.logger.warning(f"[history] Empty next_cstrategy @ {h['source_index']}")
+	                try_num += 1
+	                continue
 	
-	      if not applied_valid_unselected_next_cstrategy:
-	        self.logger.warning(f"[history] Empty valid_unselected_next_cstrategy at source_index={applied_source_index}")
+	            candidate = {
+	                "pre_sequences": list(h["pre_sequences"]),
+	                "next_cstrategy": [random.choice(valid_next)],
+	                "score_info": h["score_info"],
+	                "pre_info": h["pre_info"],
+	                "source_index": h["source_index"],
+	                "predicted_step_scores": [None, None],
+	                "real_step_scores": [None, None]
+	            }
+	
+	            if candidate not in next_candidates:
+	                next_candidates.append(candidate)
+	                left_num -= 1
+	        except Exception as e:
+	            self.logger.error(f"[history] Exception: {e}")
 	        try_num += 1
-	        continue
-	
-	      next_cstrategy = random.sample(applied_valid_unselected_next_cstrategy, 1)[0]
-	
-	      candidate = {
-	        "pre_sequences": list(applied_pre_sequences),
-	        "next_cstrategy": [next_cstrategy],
-	        "score_info": self.history[applied_source_index]["score_info"],
-	        "pre_info": self.history[applied_source_index]["pre_info"],
-	        "source_index": applied_source_index,
-	        "predicted_step_scores": [None, None],
-	        "real_step_scores": [None, None]
-	      }
-	
-	      if candidate not in next_candidates:
-	        next_candidates.append(candidate)
-	        left_num -= 1
-	
-	      try_num += 1
 	
 	    self.logger.info('* get_next_candidates from history: %d', len(next_candidates))
 	    self.logger.info('* get_next_candidates finished')
 	    return next_candidates
+
 
 
 	def get_best_candidate(self, next_candidates):
