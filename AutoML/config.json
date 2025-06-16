@@ -9,7 +9,7 @@
   "our_kmodel_batch_size": 32,
   "our_kmodel_learning_rate": 0.0003,
 
-  "our_pmodel_batch_size": 64,
+  "our_pmodel_batch_size": 32,
   "our_pmodel_avg_ratio": 0.3,
   "our_pmodel_learning_rate": 0.001,
   "our_pmodel_update_frequency": 1,
