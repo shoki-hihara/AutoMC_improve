@@ -36,5 +36,5 @@
 
   "pretrain_epochs": 10,
 
-  "automl_search_time_(h)": 1
+  "automl_search_time(h)": 1
 }
