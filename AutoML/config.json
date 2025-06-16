@@ -5,23 +5,23 @@
   "cuda": true,
   "seed": 0,
 
-  "our_kmodel_epochs": 20,                // 学習エポック数を大幅に減らす（例: 200 → 20）
+  "our_kmodel_epochs": 20,
   "our_kmodel_batch_size": 64,
   "our_kmodel_learning_rate": 0.001,
 
-  "our_pmodel_batch_size": 128,           // バッチサイズも少し減らす
+  "our_pmodel_batch_size": 128,
   "our_pmodel_avg_ratio": 0.3,
   "our_pmodel_learning_rate": 0.001,
   "our_pmodel_update_frequency": 1,
-  "our_pmodel_optimal_num": 5,            // 最適候補数を半減（10 → 5）
-  "our_pmodel_update_batch_num": 3,       // 更新バッチ数を減らす
+  "our_pmodel_optimal_num": 5,
+  "our_pmodel_update_batch_num": 3,
 
-  "evolution_population_num": 20,         // 集団数を減らして1世代の計算負荷軽減
+  "evolution_population_num": 20,
 
   "rl_learning_rate": 0.00035,
   "rl_ema_baseline_decay": 0.95,
 
-  "max_calg_num": 5,                      // 最大繰り返し回数を減らす（例: 10 → 5）
+  "max_calg_num": 5,
 
   "task_name": "resnet56+mini_cifar10+0.3",
   "task_info": {
@@ -34,7 +34,7 @@
     "flops_amount": 125000000
   },
 
-  "pretrain_epochs": 10,                  // 事前学習のエポック数も減らす
+  "pretrain_epochs": 10,
 
-  "automl_search_time(h)": 1             // 探索時間を1時間に短縮（120 → 1）
+  "automl_search_time_h": 1
 }
