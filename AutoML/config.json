@@ -5,33 +5,33 @@
   "cuda": true,
   "seed": 0,
 
-  "our_kmodel_epochs": 1,                    // Kモデルの学習回数を最小に
+  "our_kmodel_epochs": 1,
   "our_kmodel_batch_size": 32,
   "our_kmodel_learning_rate": 0.001,
   "our_pmodel_batch_size": 64,
   "our_pmodel_avg_ratio": 0.1,
   "our_pmodel_learning_rate": 0.001,
   "our_pmodel_update_frequency": 1,
-  "our_pmodel_optimal_num": 1,               // 選ばれるスキーム候補数を1に
-  "our_pmodel_update_batch_num": 1,          // Pモデル更新回数も削減
+  "our_pmodel_optimal_num": 1,               
+  "our_pmodel_update_batch_num": 1,          
 
-  "evolution_population_num": 5,             // 進化戦略の母集団を小さく
+  "evolution_population_num": 5,             
 
   "rl_learning_rate": 0.00035,
   "rl_ema_baseline_decay": 0.95,
 
-  "max_calg_num": 2,                         // 探索するステップ数を2に
-  "task_name": "resnet20+mini_cifar10+0.1",  // より小さなモデルとタスクに切り替え
+  "max_calg_num": 2,                         
+  "task_name": "resnet20+mini_cifar10+0.1",  
   "task_info": {
     "class_num": 10,
     "image_size": 32,
     "image_channel": 3,
-    "avg_data_num_per_class": 100,           // データ量を1/50に
-    "top1_acc": 0.65,                         // 小モデル用の精度見積もり
-    "parameter_amount": 270000,              // ResNet-20相当
+    "avg_data_num_per_class": 100,           
+    "top1_acc": 0.65,                        
+    "parameter_amount": 270000,              
     "flops_amount": 41000000
   },
-  "pretrain_epochs": 3,                      // 事前学習も最小に
+  "pretrain_epochs": 3,                      
 
-  "automl_search_time(h)": 0.1               // 最大で6分間
+  "automl_search_time(h)": 0.1               
 }
