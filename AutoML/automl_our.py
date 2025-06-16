@@ -364,15 +364,29 @@ class AutoMLOur(object):
 	        optimal_scheme_indexs, predicted_optimal_step_scores = self.p_model.main(
 	            pre_sequences, next_cstrategies, history_scheme_scores, self.optimal_num
 	        )
+	
+	        # NaNチェック
+	        if predicted_optimal_step_scores is None:
+	            raise ValueError("predicted_optimal_step_scores is None")
+	
+	        if torch.isnan(predicted_optimal_step_scores).any():
+	            self.logger.error("❗ predicted_optimal_step_scores に NaN が含まれています")
+	            self.logger.error("値: %s", str(predicted_optimal_step_scores))
+	            raise ValueError("predicted_optimal_step_scores に NaN")
 	    except Exception as e:
-	        self.logger.error(f'Exception in p_model.main: {str(e)}')
+	        self.logger.error(f'Exception in p_model.main or NaN check: {str(e)}')
 	        return [], []
 	
 	    best_candidates = []
 	    for i, index in enumerate(optimal_scheme_indexs):
 	        try:
-	            best_candidates.append(next_candidates[index])
-	            best_candidates[-1]["predicted_step_scores"] = predicted_optimal_step_scores[i].data.cpu().numpy()
+	            if index >= len(next_candidates):
+	                self.logger.warning(f'Index out of range in best_candidates: {index}')
+	                continue
+	
+	            best_candidate = copy.deepcopy(next_candidates[index])  # 念のため deepcopy
+	            best_candidate["predicted_step_scores"] = predicted_optimal_step_scores[i].data.cpu().numpy()
+	            best_candidates.append(best_candidate)
 	        except Exception as e:
 	            self.logger.error(f'Exception while building best_candidates: {str(e)}')
 	            continue
@@ -380,6 +394,7 @@ class AutoMLOur(object):
 	    self.logger.info('* get_best_candidate finished')
 	    self.logger.info(f'* best_candidates count: {len(best_candidates)}')
 	    return best_candidates, predicted_optimal_step_scores
+
 
 
 	def pareto_opt_tell(self, score1, score2):
@@ -407,6 +422,13 @@ class AutoMLOur(object):
 			return None
 
 	def evaluate_best_candidate(self, best_candidates):
+		# best_candidates に real_step_scores を入れている部分でチェック
+		for c in best_candidates:
+			if "real_step_scores" in c:
+				if any([np.isnan(s) for s in c["real_step_scores"]]):
+					self.logger.error("❗ best_candidate の real_step_scores に NaN: %s", c["real_step_scores"])
+					raise ValueError("real_step_scores に NaN")
+
 		for i in range(len(best_candidates)):
 			best_candidate = best_candidates[i]
 
