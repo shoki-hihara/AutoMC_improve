@@ -425,9 +425,10 @@ class AutoMLOur(object):
 		# best_candidates に real_step_scores を入れている部分でチェック
 		for c in best_candidates:
 			if "real_step_scores" in c:
-				if any([np.isnan(s) for s in c["real_step_scores"]]):
+				if any([np.isnan(s) for s in c["real_step_scores"] if isinstance(s, float)]):
 					self.logger.error("❗ best_candidate の real_step_scores に NaN: %s", c["real_step_scores"])
 					raise ValueError("real_step_scores に NaN")
+
 
 		for i in range(len(best_candidates)):
 			best_candidate = best_candidates[i]
