@@ -6,11 +6,18 @@ import numpy as np
 import torch
 import torch.nn as nn
 import math
-import copy
 
 from utils import *
 import train
 import models
+
+# Google Driveを使う場合はColab環境で以下が必要です
+try:
+    from google.colab import drive
+    drive.mount('/content/drive')
+except ImportError:
+    # Google Colab以外の環境ではスキップ
+    pass
 
 
 class SoftFilterPruning:
@@ -20,7 +27,7 @@ class SoftFilterPruning:
         self.data_dir = data['dir']
         self.data_name = data['name']
         self.save_dir = save_dir
-        self.arch = arch['dir']
+        self.arch = arch['dir']  # ここにGoogle Drive上のパスを入れる想定
         self.arch_name = arch['name']
         self.rate = math.sqrt(rate)
         self.epochs = epochs
@@ -32,9 +39,9 @@ class SoftFilterPruning:
         if fixed_seed:
             seed_torch()
         self.use_logger = use_logger
-        if self.use_logger is True:
+        if self.use_logger == True:
             self.logger = set_logger('{}_{}_C4'.format(self.data_name, self.arch_name), self.save_dir)
-        elif self.use_logger is False or self.use_logger is None:
+        elif self.use_logger == False:
             self.logger = None
         else:
             self.logger = use_logger
@@ -43,12 +50,14 @@ class SoftFilterPruning:
         if self.logger:
             self.logger.info(">>>>>> Starting C4")
 
-        # Load original model (map_location='cuda' or 'cpu' for portability)
-        device = 'cuda' if self.cuda else 'cpu'
-        model = torch.load(self.arch, map_location=device)
+        # Load original model from Google Drive path
+        model_path = self.arch
         if self.logger:
-            self.logger.info("Loaded model '{}' from {}".format(self.arch_name, self.arch))
-            self.logger.info("The original model's cfg={}".format(model.cfg))
+            self.logger.info(f"Loading model from {model_path}")
+        model = torch.load(model_path, map_location='cuda' if self.cuda else 'cpu')
+        if self.logger:
+            self.logger.info("Loaded model '{}' from {}".format(self.arch_name, model_path))
+            self.logger.info("The original model's cfg={}".format(getattr(model, 'cfg', 'N/A')))
 
         if self.cuda:
             model = model.cuda()
@@ -61,9 +70,9 @@ class SoftFilterPruning:
         # Load data
         train_loader, val_loader = models.load_data(self.data_name, self.data_dir, arch_name=self.arch_name)
         if self.logger:
-            self.logger.info("Loaded dataset '{}' from '{}'".format(self.data_name, self.data_dir))
+            self.logger.info("Loaded dateset '{}' from '{}'".format(self.data_name, self.data_dir))
 
-        # Get filename for saving
+        # Get filename
         filename, bestname = get_filename_training(self.save_dir, 'C4')
 
         # Initialize mask
@@ -84,7 +93,7 @@ class SoftFilterPruning:
             # Run one epoch
             need_time = timer.get_need_time(self.epochs, epoch)
             if self.logger:
-                self.logger.info(f"Epoch {epoch + 1}/{self.epochs}  {need_time}  lr={optimizer.param_groups[0]['lr']}")
+                self.logger.info("Epoch {}/{}  {:s}  lr={}".format(epoch + 1, self.epochs, need_time, optimizer.param_groups[0]['lr']))
 
             # Train for one epoch
             train.train(model, None, criterion, optimizer, train_loader, self.logger, kd_params=self.kd_params)
@@ -104,7 +113,7 @@ class SoftFilterPruning:
                     model = model.cuda()
             else:
                 now_prune = False
-
+            
             # Evaluate on validation set
             val_metrics = validate(model, val_loader, self.logger)
 
@@ -129,20 +138,17 @@ class SoftFilterPruning:
 
             timer.update()
 
-        old_model = torch.load(bestname, map_location=device)
+        old_model = torch.load(bestname, map_location='cuda' if self.cuda else 'cpu')
         small_model = get_small_model(old_model, self.arch_name, 'conv')
 
-        model_dir, val_metrics = fine_tune(
-            self.save_dir, small_model, train_loader, val_loader,
-            epochs=self.additional_fine_tune_epochs, lr=self.lr, lr_sche=self.lr_sche,
-            logger=self.logger, kd_params=self.kd_params, return_file=True, use_logger=self.use_logger
-        ).main()
+        model_dir, val_metrics = fine_tune(self.save_dir, small_model, train_loader, val_loader,
+                                             epochs=self.additional_fine_tune_epochs, lr=self.lr, lr_sche=self.lr_sche, logger=self.logger, kd_params=self.kd_params, return_file=True, use_logger=self.use_logger).main()
 
         # Calculate metrics
-        result = calc_result(torch.load(self.arch, map_location=device), metrics_original, torch.load(model_dir, map_location=device), val_metrics, model_dir, self.logger)
+        result = calc_result(torch.load(self.arch, map_location='cuda' if self.cuda else 'cpu'), metrics_original, torch.load(model_dir, map_location='cuda' if self.cuda else 'cpu'), val_metrics, model_dir, self.logger)
         save_result_to_json(self.save_dir, result)
 
-        if self.use_logger is True:
+        if self.use_logger == True:
             close_logger()
         return result
 
@@ -165,26 +171,27 @@ class Mask:
         if len(weight_torch.size()) == 4:
             if len(now_filter_index) == 1 and now_filter_index[0] == -1:
                 # The filter to be pruned in each conv layer
-                filter_pruned_num = int(weight_torch.size()[0] * (1 - compress_rate))
+                filter_pruned_num = int(
+                    weight_torch.size()[0] * (1 - compress_rate))
                 # Flatten each filter
                 weight_vec = weight_torch.view(weight_torch.size()[0], -1)
                 norm2 = torch.norm(weight_vec, 2, 1)
                 norm2_np = norm2.cpu().numpy()
-                # Sort from little to large, return index
+                # Sort from little to large, reutrn index
                 filter_index = norm2_np.argsort()[:filter_pruned_num]
             else:
                 filter_index = now_filter_index
-
+                
             # Size of flattened filter
             kernel_length = weight_torch.size()[1] * weight_torch.size()[2] * weight_torch.size()[3]
             for x in range(len(filter_index)):
                 codebook[filter_index[x] * kernel_length: (filter_index[x] + 1) * kernel_length] = 0
-
+                
             mini_kernel_length = weight_torch.size()[2] * weight_torch.size()[3]
             for x in range(weight_torch.size()[0]):
                 for y in range(len(last_filter_index)):
                     codebook[x * kernel_length + last_filter_index[y] * mini_kernel_length: x * kernel_length + (last_filter_index[y] + 1) * mini_kernel_length] = 0
-
+            
         else:
             if self.logger:
                 self.logger.error("Error while getting filter codebook!")
@@ -197,7 +204,7 @@ class Mask:
                 self.model_size[index] = self.modules[index][0].weight.data.size()
 
         for index1 in self.model_size:
-            for index2 in range(len(self.model_size[index1])):
+            for index2 in range(0, len(self.model_size[index1])):
                 if index2 == 0:
                     self.model_length[index1] = self.model_size[index1][0]
                 else:
@@ -215,4 +222,61 @@ class Mask:
         for index in range(len(self.modules)):
             if 'criterion' in self.modules[index][1]:
                 self.mat[index], filter_index[index] = self.get_filter_codebook(
-                    self.modules
+                    self.modules[index][0].weight.data, self.compress_rate[index], self.model_length[index], last_filter_index)
+                last_filter_index = filter_index[index]
+                self.mat[index] = torch.FloatTensor(self.mat[index])
+                if self.cuda:
+                    self.mat[index] = self.mat[index].cuda()
+            
+        label = 'bn1' if 'wide_resnet' in arch_name else 'conv1'
+        channel_index = torch.tensor((), dtype=torch.int32)
+        filter_index[0] = channel_index
+        for index in range(len(self.modules)):
+            if label in self.modules[index][2]:
+                basic_start_index = channel_index
+            if isinstance(self.modules[index][0], nn.Conv2d) and 'shortcut' not in self.modules[index][1]:
+                channel_index = filter_index[index]
+            elif isinstance(self.modules[index][0], nn.Conv2d) and 'shortcut' in self.modules[index][1]:
+                self.mat[index], _ = self.get_filter_codebook(
+                    self.modules[index][0].weight.data, None, self.model_length[index], basic_start_index, channel_index)
+                self.mat[index] = torch.FloatTensor(self.mat[index])
+                if self.cuda:
+                    self.mat[index] = self.mat[index].cuda()
+            elif isinstance(self.modules[index][0], nn.BatchNorm2d):
+                mask = torch.ones(self.modules[index][0].weight.data.shape[0])
+                if self.cuda: mask = mask.cuda()
+                if 'shortcut.0' in self.modules[index][2]:
+                    for x in basic_start_index: mask[x] = 0
+                else:
+                    for x in channel_index: mask[x] = 0
+                self.modules[index][0].weight.data.mul_(mask)
+                self.modules[index][0].bias.data.mul_(mask)
+            elif isinstance(self.modules[index][0], nn.Linear):
+                data = self.modules[index][0].weight.data.clone()
+                for x in channel_index:
+                    for y in range(data.shape[0]):
+                        data[y][x] = 0
+                self.modules[index][0].weight.data = data
+                
+
+        for index in range(len(self.modules)):
+            if index in self.mat.keys():
+                a = self.modules[index][0].weight.data.view(self.model_length[index])
+                b = a * self.mat[index]
+                self.modules[index][0].weight.data = b.view(self.model_size[index])
+        if self.logger:
+            self.logger.info("mask Done")
+
+
+if __name__ == '__main__':
+    arch_name = 'resnet20'
+    data = {'dir': './data', 'name': 'mini_cifar100'}
+
+    # Google Drive上のモデルパス例（適宜ご自分の環境のパスに変更してください）
+    # 例: /content/drive/MyDrive/trained_models/mini_cifar100/resnet20.pth.tar
+    model_path = '/content/drive/MyDrive/trained_models/{}/{}.pth.tar'.format(data['name'], arch_name)
+
+    save_dir = './snapshots/{}/C4/'.format(arch_name)
+    arch = {'dir': model_path, 'name': arch_name}
+    sfp = SoftFilterPruning(data, save_dir, arch, rate=0.7, epochs=50, fixed_seed=False)
+    print(sfp.main())
