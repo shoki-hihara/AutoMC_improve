@@ -21,7 +21,7 @@ class LeGR:
         self.data_dir = data['dir']
         self.data_name = data['name']
         self.save_dir = save_dir
-        self.arch = arch['dir']
+        self.arch = arch['/content/drive/MyDrive/学習/大学院/特別研究/AutoMC/model_cifar100_vgg16_best.pth.tar']  # teacherモデルのパス（Google Driveの絶対パスを想定）
         self.arch_name = arch['name']
         self.rate = rate
         self.max_prune_per_layer = max_prune_per_layer
@@ -72,19 +72,6 @@ class LeGR:
                     self.filter_ranks[index] = torch.pow(layer.weight.data, 2)
                 elif self.rank_type == 'l2_bn_param': 
                     self.filter_ranks[index] = torch.pow(layer.weight.data, 2) * in_params
-    '''
-    def get_noise(self, model):
-        modules = get_modules(model, self.arch_name, self.prune_type)
-        error = 1e-4
-        noise = error * np.random.normal(size=self.total)
-        for index in range(len(modules)):
-            m = modules[index][0]
-            if isinstance(m, self.label_layer):
-                for i in range(len(mask)):
-                    m.weight.data[i].mul_(mask[i])
-                    if self.label_layer == nn.BatchNorm2d:
-                        m.bias.data[i].mul_(mask[i])
-    '''
 
     def get_thre(self, filter_ranks_copy, model):
         def get_rate(thre):
@@ -99,7 +86,7 @@ class LeGR:
                 thre_candidates.append(i.float())
             num += len(filter_ranks_copy[k])
         
-        thre_candidates.sort() #  = rv_duplicate_ele(thre_candidates, sort=True)
+        thre_candidates.sort()
 
         if self.logger:
             self.logger.info('length of thre candidates:' + str(len(thre_candidates)))
@@ -115,11 +102,6 @@ class LeGR:
         now_rate = get_rate(target_thre)
         if self.logger:
             self.logger.info('now_rate is {}, target rate is {}'.format(now_rate, self.rate))
-        '''
-        if abs(now_rate - self.rate) > 0.02:
-            self.logger.info('now_rate is {}, target rate is {}, adding noise to model'.format(now_rate, self.rate))
-            self.get_noise(model)
-        '''
         return target_thre
 
     def get_mask(self, weight_copy, thre):
@@ -144,7 +126,6 @@ class LeGR:
                     m.weight.data[i].mul_(mask[i])
                     if self.label_layer == nn.BatchNorm2d:
                         m.bias.data[i].mul_(mask[i])
-                # self.logger.info('layer index: {:d} \t total channel: {:d} \t remaining channel: {:d}'.format(index, mask.shape[0], int(torch.sum(mask))))
 
         compressed_model = get_small_model(model_copy, self.arch_name, self.prune_type, small_model_with_param=small_model_with_param)
         compression_rate = 1 - pruned / self.total
@@ -239,95 +220,4 @@ class LeGR:
                 mnum = int(MUTATE_PERCENT * len(self.filter_ranks))
                 mutate_candidate = np.random.choice(len(self.filter_ranks), mnum)
                 for k, j in zip(sorted(self.filter_ranks.keys()), range(len(self.filter_ranks))):
-                    scale = 1
-                    shift = 0
-                    if j in mutate_candidate:
-                        scale = np.exp(float(np.random.normal(0, SCALE_SIGMA * step_size)))
-                        shift = float(np.random.normal(0, original_dist_stat[k]['std']))
-                    perturbation.append((scale * base[j][0], shift + base[j][1]))
-            
-            self.filter_ranks = original_dist
-
-            # Given affine transformations, rank and prune
-            compression_rate, compressed_model = self.pruning_with_transformations(perturbation)
-            
-            compressed_model, val_metrics = fine_tune(self.save_dir, compressed_model, train_loader, val_loader, epochs=max(self.fine_tune_epochs, 1), lr=self.lr, logger=self.logger, original_model=original_model, kd_params=self.kd_params, use_logger=self.use_logger).main()
-            
-            loss = val_metrics['loss']
-
-            if loss < minimum_loss:
-                minimum_loss = loss
-                best_perturbation = perturbation
-                best_model = (compression_rate, compressed_model)
-            
-            if i < POPULATIONS:
-                index_queue.put(i)
-                population_data.append(perturbation)
-                population_loss = np.append(population_loss, [loss])
-            else:
-                index_queue.put(oldest_index)
-                population_data[oldest_index] = perturbation
-                population_loss[oldest_index] = loss
-
-            if self.logger:
-                self.logger.info('Generation {}/{}, Step: {:.2f}, Min Loss: {:.3f}'.format(i, generations, step_size, np.min(population_loss)))
-
-        total_t = time.time() - start_t
-        if self.logger:
-            self.logger.info('Finished. Use {:.2f} hours. Minimum Loss: {:.3f}'.format(float(total_t) / 3600, minimum_loss))
-
-        # np.savetxt(os.path.join(self.save_dir, '{}_ea_loss.txt'.format(self.arch_name)), np.array(mean_loss))
-        # np.savetxt(os.path.join(self.save_dir, '{}_ea_min.data'.format(self.arch_name)), best_perturbation)
-
-        # Use the best affine transformation to obtain the resulting model
-        compression_rate, compressed_model = best_model[0], best_model[1]
-
-        model_dir = os.path.join(self.save_dir, '{}_small_unfinetuned_{}.pth.tar'.format(self.arch_name, time_file_str()))
-        torch.save(compressed_model, model_dir)
-
-        compressed_model, val_metrics = fine_tune(self.save_dir, compressed_model, train_loader, val_loader, epochs=self.additional_fine_tune_epochs, lr=self.lr, lr_sche=self.lr_sche, logger=self.logger, use_logger=self.use_logger).main()
-
-        model_dir = os.path.join(self.save_dir, '{}_small_{}.pth.tar'.format(self.arch_name, time_file_str()))
-        torch.save(compressed_model, model_dir)
-        return compression_rate, model_dir, val_metrics
-
-    def main(self):
-        if self.logger:
-            self.logger.info(">>>>>> Starting C2")
-
-        # Load original model
-        self.model = torch.load(self.arch)
-        self.original_model = torch.load(self.arch)
-        if self.logger:
-            self.logger.info("Loaded model '{}' from {}".format(self.arch_name, self.arch))
-            self.logger.info("The original model's cfg={}".format(self.model.cfg))
-
-        if self.cuda:
-            self.model = self.model.cuda()
-        
-        # Test before training
-        metrics_original = test_at_beginning_original(self.model, self.data_name, self.data_dir, self.logger, self.arch_name)
-
-        # Get filter ranks
-        self.get_filter_ranks()
-
-        # Learn ranking through ea
-        compression_rate, model_dir, val_metrics = self.learn_ranking_ea()
-
-        # Calculate metrics
-        result = calc_result(self.original_model, metrics_original, torch.load(model_dir), val_metrics, model_dir, self.logger)
-        save_result_to_json(self.save_dir, result)
-
-        if self.use_logger == True:
-            close_logger()
-        return result
-
-'''
-if __name__ == '__main__':
-    arch_name = 'vgg13'
-    data = {'dir': './data', 'name': 'mini_cifar10'}
-    save_dir = './snapshots/{}/C2/'.format(arch_name)
-    arch = {'dir': './trained_models/{}/{}.pth.tar'.format(data['name'], arch_name), 'name': arch_name}
-    lr = LeGR(data, save_dir, arch, fine_tune_epochs=1, additional_fine_tune_epochs=1, rate=0.7, generations=1, rank_type='l2_bn_param', fixed_seed=True)
-    print(lr.main())
-'''
+                   
