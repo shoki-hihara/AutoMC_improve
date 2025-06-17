@@ -5,7 +5,7 @@
   "cuda": true,
   "seed": 0,
 
-  "our_kmodel_epochs": 200,
+  "our_kmodel_epochs": 50,
   "our_kmodel_batch_size": 64,
   "our_kmodel_learning_rate": 0.001,
   "our_pmodel_batch_size": 256,
@@ -33,5 +33,5 @@
   },
   "pretrain_epochs": 50,
 
-  "automl_search_time(h)": 120
+  "automl_search_time(h)": 24
 }
