@@ -21,7 +21,7 @@ class LeGR:
         self.data_dir = data['dir']
         self.data_name = data['name']
         self.save_dir = save_dir
-        self.arch = arch['/content/drive/MyDrive/学習/大学院/特別研究/AutoMC/model_cifar100_vgg16_best.pth.tar']  # teacherモデルのパス（Google Driveの絶対パスを想定）
+        self.arch = arch['dir']  # teacherモデルのパス（Google Driveの絶対パスを想定）
         self.arch_name = arch['name']
         self.rate = rate
         self.max_prune_per_layer = max_prune_per_layer
