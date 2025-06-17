@@ -21,7 +21,7 @@ class LeGR:
         self.data_dir = data['dir']
         self.data_name = data['name']
         self.save_dir = save_dir
-        self.arch = arch['dir']  # teacherモデルのパス（Google Driveの絶対パスを想定）
+        self.arch = arch['dir']  # Googleドライブのパスを想定
         self.arch_name = arch['name']
         self.rate = rate
         self.max_prune_per_layer = max_prune_per_layer
@@ -86,7 +86,7 @@ class LeGR:
                 thre_candidates.append(i.float())
             num += len(filter_ranks_copy[k])
         
-        thre_candidates.sort()
+        thre_candidates.sort() #  = rv_duplicate_ele(thre_candidates, sort=True)
 
         if self.logger:
             self.logger.info('length of thre candidates:' + str(len(thre_candidates)))
@@ -220,4 +220,73 @@ class LeGR:
                 mnum = int(MUTATE_PERCENT * len(self.filter_ranks))
                 mutate_candidate = np.random.choice(len(self.filter_ranks), mnum)
                 for k, j in zip(sorted(self.filter_ranks.keys()), range(len(self.filter_ranks))):
-                   
+                    scale = 1
+                    shift = 0
+                    if j in mutate_candidate:
+                        scale = np.exp(float(np.random.normal(0, SCALE_SIGMA * step_size)))
+                        shift = float(np.random.normal(0, original_dist_stat[k]['std']))
+                    perturbation.append((scale * base[j][0], shift + base[j][1]))
+            
+            self.filter_ranks = original_dist
+
+            # Given affine transformations, rank and prune
+            compression_rate, compressed_model = self.pruning_with_transformations(perturbation)
+            
+            compressed_model, val_metrics = fine_tune(self.save_dir, compressed_model, train_loader, val_loader, epochs=max(self.fine_tune_epochs, 1), lr=self.lr, logger=self.logger, original_model=original_model, kd_params=self.kd_params, use_logger=self.use_logger).main()
+            
+            loss = val_metrics['loss']
+
+            if loss < minimum_loss:
+                minimum_loss = loss
+                best_perturbation = perturbation
+                best_model = (compression_rate, compressed_model)
+            
+            if i < POPULATIONS:
+                index_queue.put(i)
+                population_data.append(perturbation)
+                population_loss = np.append(population_loss, [loss])
+            else:
+                population_data[oldest_index] = perturbation
+                population_loss[oldest_index] = loss
+                index_queue.put(oldest_index)
+
+            if self.logger:
+                self.logger.info('Generation {}/{} Loss: {} Rate: {}'.format(i, generations, loss, compression_rate))
+
+        if self.logger:
+            self.logger.info('best compression_rate: ' + str(best_model[0]))
+        return best_model
+
+    def main(self):
+        # Googleドライブからのモデルロード
+        if self.logger:
+            self.logger.info("Loading model from {}".format(self.arch))
+        self.model = torch.load(self.arch)
+        if self.cuda:
+            self.model.cuda()
+
+        self.model.eval()
+
+        # 初期フィルターランキング取得
+        self.get_filter_ranks()
+
+        # EAを使ってフィルターのランキングを学習
+        compression_rate, compressed_model = self.learn_ranking_ea()
+
+        if self.logger:
+            self.logger.info("Fine tuning final compressed model...")
+        train_loader, val_loader = models.load_data(self.data_name, self.data_dir, arch_name=self.arch_name)
+
+        # 最終ファインチューニング
+        compressed_model, val_metrics = fine_tune(self.save_dir, compressed_model, train_loader, val_loader, epochs=self.additional_fine_tune_epochs, lr=self.lr, logger=self.logger, kd_params=self.kd_params, use_logger=self.use_logger).main()
+
+        if self.logger:
+            self.logger.info("Finished fine tuning.")
+            self.logger.info("Validation Loss: {}".format(val_metrics['loss']))
+            self.logger.info("Validation Accuracy: {}".format(val_metrics['acc']))
+
+        # モデル保存
+        save_path = os.path.join(self.save_dir, 'compressed_model.pth')
+        torch.save(compressed_model, save_path)
+
+        return compressed_model
