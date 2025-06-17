@@ -15,7 +15,7 @@ class NetworkSlimming:
         self.data_dir = data['dir']
         self.data_name = data['name']
         self.save_dir = save_dir
-        self.arch = arch['/content/drive/MyDrive/学習/大学院/特別研究/AutoMC/model_cifar100_vgg16_best.pth.tar']  # Google Driveの絶対パスを想定
+        self.arch = arch['dir']  # Google Driveの絶対パスを想定
         self.arch_name = arch['name']
         self.rate = rate
         self.kd_params = kd_params
