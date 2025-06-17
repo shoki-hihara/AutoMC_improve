@@ -396,30 +396,22 @@ class AutoMLOur(object):
 	    return best_candidates, predicted_optimal_step_scores
 
 
+	def pareto_opt_tell(score1, score2):
+	    """
+	    Returns True if score1 dominates score2 (i.e., score1 is better), False if not, None if incomparable.
+	    """
+	    acc1, comp1 = score1
+	    acc2, comp2 = score2
+	
+	    if acc1 >= acc2 and comp1 >= comp2 and (acc1 > acc2 or comp1 > comp2):
+	        return True
+	    elif acc2 >= acc1 and comp2 >= comp1 and (acc2 > acc1 or comp2 > comp1):
+	        return False
+	    else:
+	        return None
 
-	def pareto_opt_tell(self, score1, score2):
-		if score1[0] == score2[0] and score1[1] > score2[1]: # 0: acc, 1: compression_rate
-			return True # score1 better, delete score2
 
-		if score1[0] > score2[0] and score1[1] > score2[1]:
-			return True # score1 better, delete score2
 
-		if score1[0] > score2[0] and score1[1] == score2[1]:
-			return True # score1 better, delete score2
-
-		if score1[0] == score2[0] and score1[1] < score2[1]:
-			return False # score2 better, score1 not Pareto
-
-		if score1[0] == score2[0] and score1[1] == score2[1]:
-			return False # score2 better, score1 not Pareto
-
-		if score1[0] < score2[0] and score1[1] < score2[1]:
-			return False # score2 better, score1 not Pareto
-
-		if score1[0] < score2[0] and score1[1] == score2[1]:
-			return False # score2 better, score1 not Pareto
-		else:
-			return None
 
 	def evaluate_best_candidate(self, best_candidates):
 		# best_candidates に real_step_scores を入れている部分でチェック
@@ -518,29 +510,6 @@ class AutoMLOur(object):
 					valid_unselected_next_cstrategy.append(i)
 		return valid_unselected_next_cstrategy
 
-	def pareto_opt_tell1(self, score1, score2):
-		if score1[0] == score2[0] and score1[1] > score2[1]:
-			return True # score1 better, delete score2
-
-		if score1[0] > score2[0] and score1[1] > score2[1]:
-			return True # score1 better, delete score2
-
-		if score1[0] > score2[0] and score1[1] == score2[1]:
-			return True # score1 better, delete score2
-
-		if score1[0] == score2[0] and score1[1] < score2[1]:
-			return False # score2 better, score1 not Pareto
-
-		if score1[0] == score2[0] and score1[1] == score2[1]:
-			return False # score2 better, score1 not Pareto
-
-		if score1[0] < score2[0] and score1[1] < score2[1]:
-			return False # score2 better, score1 not Pareto
-
-		if score1[0] < score2[0] and score1[1] == score2[1]:
-			return False # score2 better, score1 not Pareto
-		else:
-			return None
 
 	def update_history(self, best_candidate, score_info, new_pre_info, step_code, step_code_index):
 		# update history, pareto_history, avg_pareto_history
@@ -671,35 +640,70 @@ class AutoMLOur(object):
 		return ground_truth, predicted_optimal_step_scores
 
 	def update_p_model(self, best_candidates, predicted_optimal_step_scores):
-		ground_truth = []
-		for i in range(len(best_candidates)):
-			ground_truth.append(best_candidates[i]["real_step_scores"])
-		ground_truth = torch.FloatTensor(ground_truth).reshape(-1,2).cuda()
+	    # NaN除去付き ground_truth 作成
+	    ground_truth = []
+	    valid_indices = []
+	    for i in range(len(best_candidates)):
+	        score = best_candidates[i]["real_step_scores"]
+	        if any([np.isnan(s) for s in score if isinstance(s, float)]):
+	            self.logger.warning("❗ p_model update skipped due to NaN in best_candidates[%d]: %s", i, score)
+	            continue
+	        ground_truth.append(score)
+	        valid_indices.append(i)
+	
+	    if len(ground_truth) == 0:
+	        self.logger.warning("⚠️ No valid ground_truth to update p_model.")
+	        return
+	
+	    ground_truth = torch.FloatTensor(ground_truth).reshape(-1, 2).cuda()
+	    predicted_optimal_step_scores = predicted_optimal_step_scores[valid_indices]
+	
+	    self.optimizer.zero_grad()
+	    loss_value = self.loss(predicted_optimal_step_scores, ground_truth) 
+	    loss_value.backward()
+	    self.optimizer.step()
+	    self.logger.info('@ loss_value 1 of p_model: %.2f', loss_value.item())
+	
+	    self.logger.info('@ number of p_model_data obtained before: %d', len(self.p_model_data))
+	    self.logger.info('@ p_model_data: %s', str(self.p_model_data))
+	
+	    if len(self.p_model_data) > 0:
+	        for i in range(self.update_batch_num):
+	            ground_truth_batch, predicted_optimal_step_scores_batch = self.get_history_data_batch()
+	
+	            self.optimizer.zero_grad()
+	            loss_value_batch = self.loss(predicted_optimal_step_scores_batch, ground_truth_batch) 
+	            loss_value_batch.backward()
+	            self.optimizer.step()
+	
+	            self.logger.info('@ update batch_num of p_model: %d', i)
+	            self.logger.info('@ loss_value 2 of p_model: %.2f', loss_value_batch.item())
+	
+	    self.p_model_data.extend(copy.deepcopy([best_candidates[i] for i in valid_indices]))
+	    return
 
-		self.optimizer.zero_grad()
-		loss_value = self.loss(predicted_optimal_step_scores, ground_truth) 
-		loss_value.backward()
-		self.optimizer.step()
-		self.logger.info('@ loss_value 1 of p_model: %.2f', loss_value.item())
+	def safe_parse_value(s, unit='M', logger=None):
+	    """
+	    Parses a string like '12.3M' or '1.5G' into a float value in MB.
+	    If 'G' is specified, it converts GB to MB (using 1G = 500M as in original logic).
+	    If parsing fails, returns 0.0 and logs the warning if logger is provided.
+	    """
+	    try:
+	        if not isinstance(s, str):
+	            raise ValueError(f"Input is not a string: {s}")
+	        
+	        value = float(s.strip().replace(unit, ''))
+	        if unit == 'M':
+	            return value
+	        elif unit == 'G':
+	            return value * 500  # original logic: *1000 / 2
+	        else:
+	            raise ValueError(f"Unsupported unit: {unit}")
+	    except Exception as e:
+	        if logger:
+	            logger.warning("❗ Failed to parse value '%s': %s", s, str(e))
+	        return 0.0
 
-		self.logger.info('@ number of p_model_data obtained before: %d', len(self.p_model_data))
-		self.logger.info('@ p_model_data: %s', str(self.p_model_data))
-		if len(self.p_model_data) > 0:
-			for i in range(self.update_batch_num):
-				ground_truth_batch, predicted_optimal_step_scores_batch = self.get_history_data_batch()
-
-				#ground_truth_batch = torch.cat([ground_truth_batch, ground_truth], dim=0)
-				#predicted_optimal_step_scores_batch = torch.cat([predicted_optimal_step_scores_batch, predicted_optimal_step_scores], dim=0)
-
-				self.optimizer.zero_grad()
-				loss_value_batch = self.loss(predicted_optimal_step_scores_batch, ground_truth_batch) 
-				loss_value_batch.backward()
-				self.optimizer.step()
-
-				self.logger.info('@ update batch_num of p_model: %d', i)
-				self.logger.info('@ loss_value 2 of p_model: %.2f', loss_value_batch.item())
-		self.p_model_data.extend(copy.deepcopy(best_candidates))
-		return
 
 	def main(self):
 		self.pareto_front_schemes_info = []
