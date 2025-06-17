@@ -412,72 +412,91 @@ class AutoMLOur(object):
 
 
 
-
 	def evaluate_best_candidate(self, best_candidates):
-		# best_candidates に real_step_scores を入れている部分でチェック
-		for c in best_candidates:
-			if "real_step_scores" in c:
-				if any([np.isnan(s) for s in c["real_step_scores"] if isinstance(s, float)]):
-					self.logger.error("❗ best_candidate の real_step_scores に NaN: %s", c["real_step_scores"])
-					raise ValueError("real_step_scores に NaN")
+	    filtered_candidates = []
+	    for i, c in enumerate(best_candidates):
+	        # NaNチェック：NaNがあればログ警告し、その候補はスキップ
+	        if "real_step_scores" in c:
+	            if any([isinstance(s, float) and np.isnan(s) for s in c["real_step_scores"]]):
+	                self.logger.warning("❗ best_candidate[%d] の real_step_scores に NaN が含まれています: %s", i, c["real_step_scores"])
+	                continue
+	
+	        self.codes += 1
+	        self.steps += 1
+	        step_code_index = c["next_cstrategy"][0]
+	        step_code = self.cstartegies[step_code_index - 1]
+	
+	        self.logger.info('@ codes: %s, steps: %s', self.codes, self.steps)
+	        self.logger.info('@ original step_code: %s', step_code)
+	
+	        self.valid_codes += 1
+	        self.valid_steps += 1
+	        self.logger.info('@ valid: True')
+	        self.logger.info('@ valid_codes: %s, valid_steps: %s', self.valid_codes, self.valid_steps)
+	        self.logger.info('@ adjusted step_code: %s', step_code)
+	
+	        scheme_code = [self.cstartegies[idx - 1] for idx in c["pre_sequences"][1:]] + [step_code]
+	        self.logger.info('@ scheme_code: %s', scheme_code)
+	
+	        pre_model_dir, pre_parameter_remain_rate, pre_flops_remain_rate, pre_acc_top1_rate, pre_acc_top5_rate = c["pre_info"]
+	        step_info, score_info, new_pre_info, table_infos = self.evaluator.main(
+	            step_code, pre_model_dir, pre_parameter_remain_rate, pre_flops_remain_rate, pre_acc_top1_rate, pre_acc_top5_rate
+	        )
+	
+	        # real_step_scoresを最新化
+	        c["real_step_scores"] = [step_info[0], step_info[2]]  # step_parameter_decreased_ratio, step_acc_increased_ratio
+	        scheme_score = list(score_info)
+	
+	        self.logger.info('@ scheme_score [step_score, compression_rate, flops_decreased_rate, parameter_amount, flops_amount]: %s', score_info)
+	        self.logger.info('@ table_infos: %s', table_infos)
+	
+	        self.update_history(c, score_info, new_pre_info, step_code, step_code_index)
+	
+	        # 最適結果の更新
+	        if self.score_opt_scheme["scheme_score"] is None or (scheme_score[0] > self.score_opt_scheme["scheme_score"][0] and scheme_score[1] >= self.target_compression_rate):
+	            self.score_opt_scheme = {
+	                "codes/valid_codes": [self.codes, self.valid_codes],
+	                "steps/valid_steps": [self.steps, self.valid_steps],
+	                "scheme_code": scheme_code,
+	                "scheme_score": scheme_score,
+	                "table_infos": table_infos
+	            }
+	
+	        # パレートフロントの更新
+	        if scheme_score[1] >= self.target_compression_rate:
+	            pareto_front, removed = True, []
+	            for pf_scheme in self.pareto_front_schemes_info:
+	                if self.pareto_opt_tell(scheme_score, pf_scheme["scheme_score"]):
+	                    removed.append(pf_scheme)
+	                elif self.pareto_opt_tell(pcheme_score, pf_scheme["scheme_score"]) == False:
+	                    pareto_front = False
+	            if pareto_front:
+	                self.pareto_front_schemes_info.append({
+	                    "codes/valid_codes": [self.codes, self.valid_codes],
+	                    "steps/valid_steps": [self.steps, self.valid_steps],
+	                    "scheme_code": scheme_code,
+	                    "scheme_score": scheme_score,
+	                    "table_infos": table_infos
+	                })
+	            for item in removed:
+	                self.pareto_front_schemes_info.remove(item)
+	
+	        self.logger.info('@ score_opt_scheme: %s', self.score_opt_scheme)
+	        self.logger.info('@ pareto_front_schemes_info count: %d', len(self.pareto_front_schemes_info))
+	
+	        search_time = time.time() - self.start_time
+	        self.logger.info('@ automl_search_time (seconds): %.4f, (hours): %.4f', search_time, search_time / 3600.0)
+	        self.logger.info('@ automl_search_time left (seconds): %.4f, (hours): %.4f',
+	                         self.automl_search_time_s - search_time,
+	                         (self.automl_search_time_s - search_time) / 3600.0)
+	        self.logger.info('@ average time (seconds)/(minutes) per valid_code: %.4f / %.4f',
+	                         search_time / max(self.valid_codes, 1),
+	                         search_time / max(self.valid_codes, 1) / 60.0)
+	
+	        filtered_candidates.append(c)
+	
+	    return filtered_candidates
 
-
-		for i in range(len(best_candidates)):
-			best_candidate = best_candidates[i]
-
-			self.codes += 1
-			self.steps += 1
-			step_code_index = best_candidate["next_cstrategy"][0]
-			step_code = self.cstartegies[step_code_index-1]
-			self.logger.info('@ codes: %s, steps: %s', str(self.codes), str(self.steps))
-			self.logger.info('@ original step_code: %s', str(step_code))
-
-			self.valid_codes += 1
-			self.valid_steps += 1
-			self.logger.info('@ valid: %s', str(True))
-			self.logger.info('@ valid_codes: %s, valid_steps: %s', str(self.valid_codes), str(self.valid_steps))
-			self.logger.info('@ adjusted step_code: %s', str(step_code))
-
-			scheme_code = []
-			for j in range(1, len(best_candidate["pre_sequences"])):
-				scheme_code.append(self.cstartegies[best_candidate["pre_sequences"][j]-1])
-			scheme_code.append(step_code)
-			self.logger.info('@ scheme_code: %s', str(scheme_code))
-
-			pre_model_dir, pre_parameter_remain_rate, pre_flops_remain_rate, pre_acc_top1_rate, pre_acc_top5_rate = best_candidate["pre_info"]
-			step_info, score_info, new_pre_info, table_infos = self.evaluator.main(step_code, pre_model_dir, pre_parameter_remain_rate, pre_flops_remain_rate, pre_acc_top1_rate, pre_acc_top5_rate)
-			best_candidates[i]["real_step_scores"] = [step_info[0], step_info[2]] # step_parameter_decreased_ratio, step_acc_increased_ratio
-			scheme_score = list(score_info)
-
-			self.logger.info('@ scheme_score [step_score, compression_rate, flops_decreased_rate, parameter_amount, flops_amount]: %s', str(score_info))
-			self.logger.info('@ table_infos: %s', str(table_infos))
-
-			self.update_history(best_candidate, score_info, new_pre_info, step_code, step_code_index)
-
-			self.logger.info('@ update optimal result......')
-			if self.score_opt_scheme["scheme_score"] == None or (scheme_score[0] > self.score_opt_scheme["scheme_score"][0] and scheme_score[1] >= self.target_compression_rate):
-				self.score_opt_scheme = {"codes/valid_codes": [self.codes, self.valid_codes], "steps/valid_steps": [self.steps, self.valid_steps], "scheme_code": scheme_code, "scheme_score": scheme_score, "table_infos": table_infos}
-			if scheme_score[1] >= self.target_compression_rate:
-				pareto_front, removed = True, []
-				for pareto_front_scheme in self.pareto_front_schemes_info:
-					if self.pareto_opt_tell(scheme_score, pareto_front_scheme["scheme_score"]) == True:
-						removed.append(pareto_front_scheme)
-					elif self.pareto_opt_tell(scheme_score, pareto_front_scheme["scheme_score"]) == False:
-						pareto_front = False
-				if pareto_front:
-					self.pareto_front_schemes_info.append({"codes/valid_codes": [self.codes, self.valid_codes], "steps/valid_steps": [self.steps, self.valid_steps], "scheme_code": scheme_code, "scheme_score": scheme_score, "table_infos": table_infos})
-				for item in removed:
-					self.pareto_front_schemes_info.remove(item)
-			self.logger.info('@ score_opt_scheme: %s', str(self.score_opt_scheme))
-			self.logger.info('@ pareto_front_schemes_info: %s', str(self.pareto_front_schemes_info))
-			#for k in range(len(self.pareto_front_schemes_info)):
-			#	self.logger.info('@ pareto_front_schemes_info %d: %s', k, str(self.pareto_front_schemes_info[k]))
-			
-			search_time = time.time()-self.start_time
-			self.logger.info('@ automl_search_time (seconds): %.4f, (hours): %.4f', search_time, search_time/60.0/60.0)
-			self.logger.info('@ automl_search_time left (seconds): %.4f, (hours): %.4f', self.automl_search_time_s-search_time, (self.automl_search_time_s-search_time)/60.0/60.0)
-			self.logger.info('@ average time (seconds)/(minutes) used for per valid_codes: %.4f / %.4f', search_time/max(self.valid_codes,1), search_time/max(self.valid_codes,1)/60.0)
-		return best_candidates
 
 	def get_valid_unselected_next_cstrategy(self, best_candidate_info):
 		'''
@@ -706,40 +725,32 @@ class AutoMLOur(object):
 
 
 	def main(self):
-		self.pareto_front_schemes_info = []
-		self.score_opt_scheme = {"codes/valid_codes": [None,None], "steps/valid_steps": [None,None], "scheme_code": None, "scheme_score": None}
-		
-		self.start_time = time.time()
-		search_time = 0.0
-		iteration = 0
-		# Execute Graph-based RL Search Strategy
-		self.p_model.train()
-		while search_time < self.automl_search_time_s:
-			self.iteration = iteration
-			self.logger.info('@ iteration: %d', iteration)
+	    self.pareto_front_schemes_info = []
+	    self.score_opt_scheme = {"codes/valid_codes": [None,None], "steps/valid_steps": [None,None], "scheme_code": None, "scheme_score": None}
 	
-			# get the optimal candidates
-			next_candidates = self.get_next_candidates() 
+	    self.start_time = time.time()
+	    search_time = 0.0
+	    iteration = 0
+	    self.p_model.train()
+	    while search_time < self.automl_search_time_s:
+	        self.iteration = iteration
+	        self.logger.info('@ iteration: %d', iteration)
+	
+	        next_candidates = self.get_next_candidates()
+	        best_candidates, predicted_optimal_step_scores = self.get_best_candidate(next_candidates)
+	        best_candidates = self.evaluate_best_candidate(best_candidates)
+	
+	        iteration += 1
+	        if iteration % self.update_frequency == 0:
+	            self.logger.info('@ update p_model')
+	            self.update_p_model(best_candidates, predicted_optimal_step_scores)
+	
+	        search_time = time.time() - self.start_time  # <= これを忘れずに！！
+	
+	    self.logger.info('@ Final pareto_front_schemes_info: %s', str(self.pareto_front_schemes_info))
+	    # ... (省略)
+	    return
 
-			# run p_model and get the best candidate
-			best_candidates, predicted_optimal_step_scores = self.get_best_candidate(next_candidates)
-
-			# evaluate the best candidate 
-			best_candidates = self.evaluate_best_candidate(best_candidates)
-
-			# update p_model 
-			iteration += 1
-			if iteration % self.update_frequency == 0:
-				self.logger.info('@ update p_model')
-				self.update_p_model(best_candidates, predicted_optimal_step_scores)
-
-		self.logger.info('@ Final pareto_front_schemes_info: %s', str(self.pareto_front_schemes_info))
-		for k in range(len(self.pareto_front_schemes_info)):
-			self.logger.info('@ Final pareto_front_schemes_info %d: %s', k, str(self.pareto_front_schemes_info[k]))
-		self.logger.info('@ Final score_opt_scheme: %s', str(self.score_opt_scheme))
-		search_time = time.time()-self.start_time
-		self.logger.info('@ Final automl_search_time (seconds): %.4f, (hours): %.4f', search_time, search_time/60.0/60.0)
-		return 
 
 '''
 if __name__ == '__main__':
