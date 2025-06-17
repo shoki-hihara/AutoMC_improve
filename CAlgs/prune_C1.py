@@ -41,4 +41,85 @@ class knowledge_distillation:
             teacher_model_obj = torch.load(self.arch, map_location='cpu')
             self.rate = rate_based_on_teacher
             self.cfg = teacher_model_obj.cfg
-        self.r
+        self.rate = math.sqrt(self.rate)
+        self.epochs = epochs
+        self.lr = 1e-3
+        self.lr_sche = 'StepLR'
+        self.kd_params = kd_params  # alpha, temperature
+        self.studentmodel_act_func = studentmodel_act_func
+        self.lma_numBins = lma_numBins
+        if fixed_seed:
+            seed_torch()
+
+    def main(self):
+        if self.logger:
+            self.logger.info(">>>>>> Starting C1(knowledge distillation)")
+
+        # Create data loader
+        train_loader, val_loader = models.load_data(self.data_name, self.data_dir, arch_name=self.arch_name)
+        if self.logger:
+            self.logger.info("Loaded dataset '{}' from '{}'".format(self.data_name, self.data_dir))
+
+        # Create student model
+        model = models.__dict__[self.arch_name](
+            num_classes=models.get_num_classes(self.data_name),
+            rate=self.rate,
+            activation=self.studentmodel_act_func,
+            numBins=self.lma_numBins,
+            cfg=self.cfg
+        )
+        if self.logger:
+            self.logger.info("Created student model '{}'".format(self.arch_name))
+            self.logger.info("The parameters used when creating the model are rate={}, activation={}, numBins={}, cfg={}".format(
+                self.rate, self.studentmodel_act_func, self.lma_numBins, self.cfg))
+            self.logger.info("The student model's cfg={}".format(model.cfg))
+
+        # Load teacher model (from Google Drive path)
+        teacher_model = torch.load(self.arch, map_location='cpu')
+        if self.logger:
+            self.logger.info("Loaded teacher model '{}' from {}".format(self.arch_name, self.arch))
+            self.logger.info("The teacher model's cfg={}".format(teacher_model.cfg))
+
+        # Test before training
+        metrics_original = test_at_beginning_original(teacher_model, self.data_name, self.data_dir, self.logger, self.arch_name)
+
+        model_dir = os.path.join(self.save_dir, '{}_small_unfinetuned_{}.pth.tar'.format(self.arch_name, time_file_str()))
+        torch.save(model, model_dir)
+
+        # Knowledge distillation
+        if self.logger:
+            self.logger.info("Entering knowledge distillation...")
+        ft = fine_tune(self.save_dir, model, train_loader, val_loader,
+                       original_model=teacher_model, epochs=self.epochs, lr=self.lr,
+                       lr_sche=self.lr_sche, logger=self.logger,
+                       kd_params=self.kd_params, return_file=True, use_logger=self.use_logger)
+        bestname, val_metrics = ft.main()
+
+        model = torch.load(bestname)
+        model_dir = os.path.join(self.save_dir, '{}_small_{}.pth.tar'.format(self.arch_name, time_file_str()))
+        torch.save(model, model_dir)
+
+        # Calculate metrics
+        result = calc_result(teacher_model, metrics_original, model, val_metrics, model_dir, self.logger)
+        save_result_to_json(self.save_dir, result)
+
+        if self.use_logger is True:
+            close_logger()
+        return result
+
+
+'''
+# 実行例
+if __name__ == '__main__':
+    arch_name = 'vgg16'
+    data = {'dir': './data', 'name': 'mini_cifar100'}
+    save_dir = './snapshots/{}/C1/'.format(arch_name)
+
+    # Google Drive に保存されている teacher モデルパス
+    arch = {'dir': '/content/drive/MyDrive/学習/大学院/特別研究/AutoMC/model_cifar100_vgg16_best.pth.tar',
+            'name': arch_name}
+
+    kd = knowledge_distillation(data, save_dir, arch, studentmodel_act_func='lma', epochs=1,
+                                fixed_seed=True, rate_based_on_teacher=0.7, rate_based_on_original=None)
+    print(kd.main())
+'''
