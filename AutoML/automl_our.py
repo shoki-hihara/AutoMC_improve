@@ -531,99 +531,99 @@ class AutoMLOur(object):
 
 
 	def update_history(self, best_candidate, score_info, new_pre_info, step_code, step_code_index):
-		# update history, pareto_history, avg_pareto_history
-		# update history
-		source_index = best_candidate["source_index"]
-		#self.logger.info('\n\n\t\tbest_candidate: %s', str(best_candidate))
-		#self.logger.info('\t\tsource_index: %d', source_index)
-		#self.logger.info('\t\thistory[source_index][valid_unselected_next_cstrategy]: %s', str(self.history[source_index]["valid_unselected_next_cstrategy"]))
-		#self.logger.info('\t\thistory[source_index][selected_next_cstrategy]: %s', str(self.history[source_index]["selected_next_cstrategy"]))
-		#self.logger.info('\t\tstep_code_index: %d', step_code_index)
-		#self.logger.info('\t\tstep_code: %s', str(step_code))
-
-		self.history[source_index]["selected_next_cstrategy"].append(step_code_index)
-		self.history[source_index]["valid_unselected_next_cstrategy"].remove(step_code_index)
-		if len(self.history[source_index]["valid_unselected_next_cstrategy"]) == 0:
-			self.history[source_index]["valid"] = False
-
-		pre_sequences = copy.deepcopy(best_candidate["pre_sequences"])
-		pre_sequences.append(step_code_index)
-
-		step_score, compression_rate, flops_decreased_rate, parameter_amount, flops_amount = score_info
-		left_compression_rate = max(self.target_compression_rate-compression_rate,0)+1.0
-		pareto_score_value = [step_score/left_compression_rate, compression_rate/left_compression_rate]
-
-		real_socre_info = [float(step_score), float(compression_rate), float(flops_decreased_rate), float(parameter_amount[:-1]), float(flops_amount[:-1])*1000/2]
-
-		if "HP10" in step_code[1].keys():
-			new_finished_finetune_rate = step_code[1]["HP10"]
-		else:
-			new_finished_finetune_rate = step_code[1]["HP1"]
-		finished_finetune_rate = self.history[source_index]["finished_finetune_rate"] + new_finished_finetune_rate
-		if float(compression_rate) <= 0.85 and float(finished_finetune_rate)+0.2 <= 4.0:
-			valid = True
-			if score_info == [0, 0, 0, '0M', '0G']:
-				valid = False
-			elif self.cstartegies[step_code_index-1][0] in ["prune_C5", "prune_C7"]:
-				valid = False
-		else:
-			valid = False
-		best_candidate_info = {
-			"pre_sequences": pre_sequences,
-			"selected_next_cstrategy": [],
-			"valid_unselected_next_cstrategy": [],
-			"score_info": list(real_socre_info),
-			"pre_info": list(new_pre_info),
-			"source_index": len(self.history),
-			"pareto_score_value": list(pareto_score_value), 
-			"finished_compression_rate": float(compression_rate), # required: self.target_compression_rate * finished_compression_rate <= 0.85
-			"finished_finetune_rate": float(finished_finetune_rate), # required: finished_finetune_rate <= 4.0
-			"valid": valid
-		}
-		valid_unselected_next_cstrategy = self.get_valid_unselected_next_cstrategy(best_candidate_info)
-		best_candidate_info["valid_unselected_next_cstrategy"] = list(valid_unselected_next_cstrategy)
-		if len(best_candidate_info["valid_unselected_next_cstrategy"]) == 0:
-			best_candidate_info["valid"] = False
-		self.history.append(best_candidate_info)
-
-		# update pareto_history
-		pareto_front, removed = True, []
-		for j in range(len(self.pareto_history)):
-			pareto_score_value_j = self.pareto_history[j]["pareto_score_value"]
-			if self.pareto_opt_tell1(pareto_score_value, pareto_score_value_j) == True:
-				removed.append(self.pareto_history[j])
-			elif self.pareto_opt_tell1(pareto_score_value, pareto_score_value_j) == False:
-				pareto_front = False
-
-		if pareto_front:
-			best_candidate_pareto_info = {
-				"source_index": best_candidate_info["source_index"],
-				"pareto_score_value": list(pareto_score_value)
-			}
-			self.pareto_history.append(best_candidate_pareto_info)
-		for item in removed:
-			self.pareto_history.remove(item)
-
-		# update avg_pareto_history
-		avg_pareto_score_value = [pareto_score_value[0]/len(pre_sequences), pareto_score_value[1]/len(pre_sequences)]
-
-		pareto_front, removed = True, []
-		for j in range(len(self.avg_pareto_history)):
-			avg_pareto_score_value_j = self.avg_pareto_history[j]["avg_pareto_score_value"]
-			if self.pareto_opt_tell1(avg_pareto_score_value, avg_pareto_score_value_j) == True:
-				removed.append(self.avg_pareto_history[j])
-			elif self.pareto_opt_tell1(avg_pareto_score_value, avg_pareto_score_value_j) == False:
-				pareto_front = False
-
-		if pareto_front:
-			best_candidate_avg_pareto_info = {
-				"source_index": best_candidate_info["source_index"],
-				"avg_pareto_score_value": list(avg_pareto_score_value)
-			}
-			self.avg_pareto_history.append(best_candidate_avg_pareto_info)
-		for item in removed:
-			self.avg_pareto_history.remove(item)
-		return
+	    # update history, pareto_history, avg_pareto_history
+	    # update history
+	    source_index = best_candidate["source_index"]
+	    #self.logger.info('\n\n\t\tbest_candidate: %s', str(best_candidate))
+	    #self.logger.info('\t\tsource_index: %d', source_index)
+	    #self.logger.info('\t\thistory[source_index][valid_unselected_next_cstrategy]: %s', str(self.history[source_index]["valid_unselected_next_cstrategy"]))
+	    #self.logger.info('\t\thistory[source_index][selected_next_cstrategy]: %s', str(self.history[source_index]["selected_next_cstrategy"]))
+	    #self.logger.info('\t\tstep_code_index: %d', step_code_index)
+	    #self.logger.info('\t\tstep_code: %s', str(step_code))
+	
+	    self.history[source_index]["selected_next_cstrategy"].append(step_code_index)
+	    self.history[source_index]["valid_unselected_next_cstrategy"].remove(step_code_index)
+	    if len(self.history[source_index]["valid_unselected_next_cstrategy"]) == 0:
+	        self.history[source_index]["valid"] = False
+	
+	    pre_sequences = copy.deepcopy(best_candidate["pre_sequences"])
+	    pre_sequences.append(step_code_index)
+	
+	    step_score, compression_rate, flops_decreased_rate, parameter_amount, flops_amount = score_info
+	    left_compression_rate = max(self.target_compression_rate - compression_rate, 0) + 1.0
+	    pareto_score_value = [step_score / left_compression_rate, compression_rate / left_compression_rate]
+	
+	    real_socre_info = [float(step_score), float(compression_rate), float(flops_decreased_rate), float(parameter_amount[:-1]), float(flops_amount[:-1]) * 1000 / 2]
+	
+	    if "HP10" in step_code[1].keys():
+	        new_finished_finetune_rate = step_code[1]["HP10"]
+	    else:
+	        new_finished_finetune_rate = step_code[1]["HP1"]
+	    finished_finetune_rate = self.history[source_index]["finished_finetune_rate"] + new_finished_finetune_rate
+	    if float(compression_rate) <= 0.85 and float(finished_finetune_rate) + 0.2 <= 4.0:
+	        valid = True
+	        if score_info == [0, 0, 0, '0M', '0G']:
+	            valid = False
+	        elif self.cstartegies[step_code_index - 1][0] in ["prune_C5", "prune_C7"]:
+	            valid = False
+	    else:
+	        valid = False
+	    best_candidate_info = {
+	        "pre_sequences": pre_sequences,
+	        "selected_next_cstrategy": [],
+	        "valid_unselected_next_cstrategy": [],
+	        "score_info": list(real_socre_info),
+	        "pre_info": list(new_pre_info),
+	        "source_index": len(self.history),
+	        "pareto_score_value": list(pareto_score_value),
+	        "finished_compression_rate": float(compression_rate),  # required: self.target_compression_rate * finished_compression_rate <= 0.85
+	        "finished_finetune_rate": float(finished_finetune_rate),  # required: finished_finetune_rate <= 4.0
+	        "valid": valid
+	    }
+	    valid_unselected_next_cstrategy = self.get_valid_unselected_next_cstrategy(best_candidate_info)
+	    best_candidate_info["valid_unselected_next_cstrategy"] = list(valid_unselected_next_cstrategy)
+	    if len(best_candidate_info["valid_unselected_next_cstrategy"]) == 0:
+	        best_candidate_info["valid"] = False
+	    self.history.append(best_candidate_info)
+	
+	    # update pareto_history
+	    pareto_front, removed = True, []
+	    for j in range(len(self.pareto_history)):
+	        pareto_score_value_j = self.pareto_history[j]["pareto_score_value"]
+	        if self.pareto_opt_tell(pareto_score_value, pareto_score_value_j) == True:
+	            removed.append(self.pareto_history[j])
+	        elif self.pareto_opt_tell(pareto_score_value, pareto_score_value_j) == False:
+	            pareto_front = False
+	
+	    if pareto_front:
+	        best_candidate_pareto_info = {
+	            "source_index": best_candidate_info["source_index"],
+	            "pareto_score_value": list(pareto_score_value)
+	        }
+	        self.pareto_history.append(best_candidate_pareto_info)
+	    for item in removed:
+	        self.pareto_history.remove(item)
+	
+	    # update avg_pareto_history
+	    avg_pareto_score_value = [pareto_score_value[0] / len(pre_sequences), pareto_score_value[1] / len(pre_sequences)]
+	
+	    pareto_front, removed = True, []
+	    for j in range(len(self.avg_pareto_history)):
+	        avg_pareto_score_value_j = self.avg_pareto_history[j]["avg_pareto_score_value"]
+	        if self.pareto_opt_tell(avg_pareto_score_value, avg_pareto_score_value_j) == True:
+	            removed.append(self.avg_pareto_history[j])
+	        elif self.pareto_opt_tell(avg_pareto_score_value, avg_pareto_score_value_j) == False:
+	            pareto_front = False
+	
+	    if pareto_front:
+	        best_candidate_avg_pareto_info = {
+	            "source_index": best_candidate_info["source_index"],
+	            "avg_pareto_score_value": list(avg_pareto_score_value)
+	        }
+	        self.avg_pareto_history.append(best_candidate_avg_pareto_info)
+	    for item in removed:
+	        self.avg_pareto_history.remove(item)
+	    return
 
 	def get_history_data_batch(self):
 		if len(self.p_model_data) > self.batch_size:
