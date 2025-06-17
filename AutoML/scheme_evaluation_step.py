@@ -39,7 +39,7 @@ class SchemeEvaluationStep(object):
 	def main(self, step_code, pre_model_dir=None, pre_parameter_remain_rate=None, pre_flops_remain_rate=None, pre_acc_top1_rate=None, pre_acc_top5_rate=None):
 		try:
 			if pre_model_dir == None or pre_parameter_remain_rate == None or pre_flops_remain_rate == None:
-				self.model = {'dir': '/content/snapshots/{}/{}/train/model_best.pth.tar'.format(self.data_name, self.model_name),'name': self.model_name}
+				self.model = {'dir': '/content/drive/MyDrive/学習/大学院/特別研究/AutoMC/AutoMC_models/cifar100/vgg16/mini_retrain/vgg16.pth.tar','name': 'vgg16'}
 				self.pre_init_rate = float(self.target_compression_rate) # delected rate
 				pre_parameter_remain_rate = 1.0 
 				pre_flops_remain_rate = 1.0
