@@ -258,35 +258,30 @@ class LeGR:
         return best_model
 
     def main(self):
-        # Googleドライブからのモデルロード
         if self.logger:
-            self.logger.info("Loading model from {}".format(self.arch))
+            self.logger.info(">>>>>> Starting C2")
+    
+        # Googleドライブ上のモデルパスをそのままtorch.loadに渡すだけ
+        if not os.path.isfile(self.arch):
+            raise FileNotFoundError(f"Model file not found at {self.arch}")
+    
+        # モデルを読み込み
         self.model = torch.load(self.arch)
+        self.original_model = torch.load(self.arch)
+        if self.logger:
+            self.logger.info("Loaded model '{}' from {}".format(self.arch_name, self.arch))
+            self.logger.info("The original model's cfg={}".format(self.model.cfg))
+    
         if self.cuda:
-            self.model.cuda()
-
-        self.model.eval()
-
-        # 初期フィルターランキング取得
+            self.model = self.model.cuda()
+    
+        metrics_original = test_at_beginning_original(self.model, self.data_name, self.data_dir, self.logger, self.arch_name)
         self.get_filter_ranks()
-
-        # EAを使ってフィルターのランキングを学習
-        compression_rate, compressed_model = self.learn_ranking_ea()
-
-        if self.logger:
-            self.logger.info("Fine tuning final compressed model...")
-        train_loader, val_loader = models.load_data(self.data_name, self.data_dir, arch_name=self.arch_name)
-
-        # 最終ファインチューニング
-        compressed_model, val_metrics = fine_tune(self.save_dir, compressed_model, train_loader, val_loader, epochs=self.additional_fine_tune_epochs, lr=self.lr, logger=self.logger, kd_params=self.kd_params, use_logger=self.use_logger).main()
-
-        if self.logger:
-            self.logger.info("Finished fine tuning.")
-            self.logger.info("Validation Loss: {}".format(val_metrics['loss']))
-            self.logger.info("Validation Accuracy: {}".format(val_metrics['acc']))
-
-        # モデル保存
-        save_path = os.path.join(self.save_dir, 'compressed_model.pth')
-        torch.save(compressed_model, save_path)
-
-        return compressed_model
+        compression_rate, model_dir, val_metrics = self.learn_ranking_ea()
+    
+        result = calc_result(self.original_model, metrics_original, torch.load(model_dir), val_metrics, model_dir, self.logger)
+        save_result_to_json(self.save_dir, result)
+    
+        if self.use_logger == True:
+            close_logger()
+        return result
