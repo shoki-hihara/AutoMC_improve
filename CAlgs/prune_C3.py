@@ -6,7 +6,8 @@ import torch
 import torch.nn as nn
 from utils import *
 from train import *
-
+import copy
+import time
 
 class NetworkSlimming:
     def __init__(self, data, save_dir, arch, fine_tune_epochs=300, rate=0.5, max_prune_per_layer=0.9, kd_params=(None, None), fixed_seed=False, use_logger=True):
@@ -14,11 +15,11 @@ class NetworkSlimming:
         self.data_dir = data['dir']
         self.data_name = data['name']
         self.save_dir = save_dir
-        self.arch = arch['dir']
+        self.arch = arch['/content/drive/MyDrive/学習/大学院/特別研究/AutoMC/model_cifar100_vgg16_best.pth.tar']  # Google Driveの絶対パスを想定
         self.arch_name = arch['name']
         self.rate = rate
         self.kd_params = kd_params
-        self.lr = 1e-3 # default learning rate is 0.1 but decay
+        self.lr = 1e-3  # default learning rate is 0.1 but decay
         self.lr_sche = 'MultiStepLR'
         self.max_prune_per_layer = max_prune_per_layer
         self.fine_tune_epochs = fine_tune_epochs
@@ -46,24 +47,24 @@ class NetworkSlimming:
         if self.logger:
             self.logger.info("Getting filter's original ranking...")
         filter_ranks = {}
-        total = 0  # the total number of kernals in BN layer
+        total = 0  # the total number of kernels in BN layer
         modules = get_modules(model, self.arch_name, 'bn')
-        
+
         for index in range(len(modules)):
             layer = modules[index][0]
             if 'criterion' in modules[index][1]:
                 total += layer.weight.data.shape[0]
                 filter_ranks[index] = layer.weight.data.abs().clone()
-        
+
         def get_model(thre):
             model_copy = copy.deepcopy(model)
             return self.get_compressed_model(thre, total, model_copy, small_model_with_param=False)[1]
-        
+
         thre_candidates = []
         for k in filter_ranks:
             for i in filter_ranks[k]:
                 thre_candidates.append(i.float())
-        
+
         thre_candidates = rv_duplicate_ele(thre_candidates, sort=True)
 
         if self.logger:
@@ -72,13 +73,15 @@ class NetworkSlimming:
         while l < r - 1:
             mid = (l + r) // 2
             now_rate = get_model(thre_candidates[mid])
-            if now_rate > self.rate: l = mid
-            else: r = mid
+            if now_rate > self.rate:
+                l = mid
+            else:
+                r = mid
 
-        now_rate = get_model(thre_candidates[l])
-        rate1 = abs(now_rate - self.rate)
-        now_rate = get_model(thre_candidates[r])
-        rate2 = abs(now_rate - self.rate)
+        now_rate_l = get_model(thre_candidates[l])
+        rate1 = abs(now_rate_l - self.rate)
+        now_rate_r = get_model(thre_candidates[r])
+        rate2 = abs(now_rate_r - self.rate)
         return (thre_candidates[l] if rate1 < rate2 else thre_candidates[r]), total
 
     def get_compressed_model(self, thre, total, model, small_model_with_param=True):
@@ -109,7 +112,7 @@ class NetworkSlimming:
         if self.logger:
             self.logger.info(">>>>>> Starting C3")
 
-        # Load original model
+        # Load original model from Google Drive path
         model = torch.load(self.arch)
         if self.logger:
             self.logger.info("Loaded model '{}' from {}".format(self.arch_name, self.arch))
