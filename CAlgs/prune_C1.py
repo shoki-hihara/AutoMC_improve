@@ -17,7 +17,7 @@ class knowledge_distillation:
         self.save_dir = save_dir
         self.data_dir = data['dir']
         self.data_name = data['name']
-        self.arch = arch['/content/drive/MyDrive/学習/大学院/特別研究/AutoMC/model_cifar100_vgg16_best.pth.tar']  # This is now expected to be a full path to the teacher model in Google Drive
+        self.arch = arch['dir']  # This is now expected to be a full path to the teacher model in Google Drive
         self.arch_name = arch['name']
         self.use_logger = use_logger
         if self.use_logger is True:
