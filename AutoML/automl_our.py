@@ -396,19 +396,23 @@ class AutoMLOur(object):
 	    return best_candidates, predicted_optimal_step_scores
 
 
-	def pareto_opt_tell(score1, score2):
-	    """
-	    Returns True if score1 dominates score2 (i.e., score1 is better), False if not, None if incomparable.
-	    """
-	    acc1, comp1 = score1
-	    acc2, comp2 = score2
+	def pareto_opt_tell(self, score1, score2):
+	    # score1, score2 はリストやタプルなど比較対象のスコア
+	    # 例：
+	    # score1 = [x1, y1]
+	    # score2 = [x2, y2]
+	    # ここで pareto dominance の判定を行う実装が入る
 	
-	    if acc1 >= acc2 and comp1 >= comp2 and (acc1 > acc2 or comp1 > comp2):
+	    # 例示：score1 が score2 を支配していれば True, 逆なら False, どちらもでなければ None など
+	    # （この判定ロジックは実装による）
+	    
+	    if (score1[0] >= score2[0] and score1[1] >= score2[1]) and (score1[0] > score2[0] or score1[1] > score2[1]):
 	        return True
-	    elif acc2 >= acc1 and comp2 >= comp1 and (acc2 > acc1 or comp2 > comp1):
+	    elif (score2[0] >= score1[0] and score2[1] >= score1[1]) and (score2[0] > score1[0] or score2[1] > score1[1]):
 	        return False
 	    else:
 	        return None
+
 
 
 
