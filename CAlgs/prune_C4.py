@@ -20,7 +20,7 @@ class SoftFilterPruning:
         self.data_dir = data['dir']
         self.data_name = data['name']
         self.save_dir = save_dir
-        self.arch = arch['/content/drive/MyDrive/学習/大学院/特別研究/AutoMC/model_cifar100_vgg16_best.pth.tar']
+        self.arch = arch['dir']
         self.arch_name = arch['name']
         self.rate = math.sqrt(rate)
         self.epochs = epochs
