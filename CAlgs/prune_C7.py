@@ -74,7 +74,7 @@ class LFB:
 
         # --- Google Drive上などの絶対パス対応 ---
         # teacherモデル（元モデル）ロード
-        model_original_path = '/content/drive/MyDrive/学習/大学院/特別研究/AutoMC/model_cifar100_vgg16_best.pth.tar'.format(self.arch_name)
+        model_original_path = '/content/drive/MyDrive/学習/大学院/特別研究/AutoMC/model_cifar100_vgg16_best.pth.tar'
         if os.path.isfile(model_original_path):
             model_original = torch.load(model_original_path)
             if self.logger:
