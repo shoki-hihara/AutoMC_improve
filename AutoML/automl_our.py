@@ -219,7 +219,7 @@ class AutoMLOur(object):
 	        pareto_history_valid = []
 	        for info in self.pareto_history:
 	            source_idx = info["source_index"]
-	            if source_idx < len(self.history) and self.history[source_idx]["valid"]:
+	            if 0 <= source_idx < len(self.history) and self.history[source_idx]["valid"]:
 	                pareto_history_valid.append(info)
 	
 	        if len(pareto_history_valid) > 0:
@@ -227,22 +227,35 @@ class AutoMLOur(object):
 	            try_num = 0
 	            while pareto_num != 0 and try_num < 1000:
 	                try:
-	                    info = random.choice(
-	                        pareto_history_valid[:top] if random.random() <= 0.5 else pareto_history_valid[top:]
-	                    )
+	                    # validな範囲で選択
+	                    if random.random() <= 0.5:
+	                        subset = pareto_history_valid[:top]
+	                    else:
+	                        subset = pareto_history_valid[top:]
+	                    if len(subset) == 0:
+	                        break
+	
+	                    info = random.choice(subset)
 	                    source_idx = info["source_index"]
+	
+	                    # source_idx の安全確認
+	                    if not (0 <= source_idx < len(self.history)):
+	                        self.logger.warning(f"[pareto] source_idx {source_idx} out of range")
+	                        try_num += 1
+	                        continue
+	
 	                    h = self.history[source_idx]
-	                    valid_next = h["valid_unselected_next_cstrategy"]
+	                    valid_next = h.get("valid_unselected_next_cstrategy", [])
 	                    if not valid_next:
 	                        self.logger.warning(f"[pareto] Empty next_cstrategy @ {source_idx}")
 	                        try_num += 1
 	                        continue
 	
 	                    candidate = {
-	                        "pre_sequences": list(h["pre_sequences"]),
+	                        "pre_sequences": list(h.get("pre_sequences", [])),
 	                        "next_cstrategy": [random.choice(valid_next)],
-	                        "score_info": h["score_info"],
-	                        "pre_info": h["pre_info"],
+	                        "score_info": h.get("score_info"),
+	                        "pre_info": h.get("pre_info"),
 	                        "source_index": source_idx,
 	                        "predicted_step_scores": [None, None],
 	                        "real_step_scores": [None, None]
@@ -275,7 +288,7 @@ class AutoMLOur(object):
 	        avg_pareto_history_valid = []
 	        for info in self.avg_pareto_history:
 	            source_idx = info["source_index"]
-	            if source_idx < len(self.history) and self.history[source_idx]["valid"]:
+	            if 0 <= source_idx < len(self.history) and self.history[source_idx]["valid"]:
 	                avg_pareto_history_valid.append(info)
 	
 	        if len(avg_pareto_history_valid) > 0:
@@ -283,22 +296,33 @@ class AutoMLOur(object):
 	            try_num = 0
 	            while avg_pareto_num != 0 and try_num < 1000:
 	                try:
-	                    info = random.choice(
-	                        avg_pareto_history_valid[:top] if random.random() <= 0.5 else avg_pareto_history_valid[top:]
-	                    )
+	                    if random.random() <= 0.5:
+	                        subset = avg_pareto_history_valid[:top]
+	                    else:
+	                        subset = avg_pareto_history_valid[top:]
+	                    if len(subset) == 0:
+	                        break
+	
+	                    info = random.choice(subset)
 	                    source_idx = info["source_index"]
+	
+	                    if not (0 <= source_idx < len(self.history)):
+	                        self.logger.warning(f"[avg_pareto] source_idx {source_idx} out of range")
+	                        try_num += 1
+	                        continue
+	
 	                    h = self.history[source_idx]
-	                    valid_next = h["valid_unselected_next_cstrategy"]
+	                    valid_next = h.get("valid_unselected_next_cstrategy", [])
 	                    if not valid_next:
 	                        self.logger.warning(f"[avg_pareto] Empty next_cstrategy @ {source_idx}")
 	                        try_num += 1
 	                        continue
 	
 	                    candidate = {
-	                        "pre_sequences": list(h["pre_sequences"]),
+	                        "pre_sequences": list(h.get("pre_sequences", [])),
 	                        "next_cstrategy": [random.choice(valid_next)],
-	                        "score_info": h["score_info"],
-	                        "pre_info": h["pre_info"],
+	                        "score_info": h.get("score_info"),
+	                        "pre_info": h.get("pre_info"),
 	                        "source_index": source_idx,
 	                        "predicted_step_scores": [None, None],
 	                        "real_step_scores": [None, None]
@@ -319,24 +343,28 @@ class AutoMLOur(object):
 	
 	    # ----- sample from history -----
 	    left_num = self.batch_size - len(next_candidates)
-	    history_valid = [h for h in self.history if h["valid"]]
+	    history_valid = [h for h in self.history if h.get("valid", False)]
 	
 	    try_num = 0
 	    while left_num > 0 and try_num < 1000:
 	        try:
+	            if len(history_valid) == 0:
+	                self.logger.warning("No valid entries in history to sample.")
+	                break
+	
 	            h = random.choice(history_valid)
-	            valid_next = h["valid_unselected_next_cstrategy"]
+	            valid_next = h.get("valid_unselected_next_cstrategy", [])
 	            if not valid_next:
-	                self.logger.warning(f"[history] Empty next_cstrategy @ {h['source_index']}")
+	                self.logger.warning(f"[history] Empty next_cstrategy @ {h.get('source_index', 'unknown')}")
 	                try_num += 1
 	                continue
 	
 	            candidate = {
-	                "pre_sequences": list(h["pre_sequences"]),
+	                "pre_sequences": list(h.get("pre_sequences", [])),
 	                "next_cstrategy": [random.choice(valid_next)],
-	                "score_info": h["score_info"],
-	                "pre_info": h["pre_info"],
-	                "source_index": h["source_index"],
+	                "score_info": h.get("score_info"),
+	                "pre_info": h.get("pre_info"),
+	                "source_index": h.get("source_index"),
 	                "predicted_step_scores": [None, None],
 	                "real_step_scores": [None, None]
 	            }
