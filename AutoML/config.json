@@ -5,7 +5,7 @@
   "cuda": true,
   "seed": 0,
 
-  "our_kmodel_epochs": 50,
+  "our_kmodel_epochs": 5,
   "our_kmodel_batch_size": 64,
   "our_kmodel_learning_rate": 0.001,
   "our_pmodel_batch_size": 256,
@@ -21,7 +21,7 @@
   "rl_ema_baseline_decay": 0.95,
 
   "max_calg_num": 10,
-  "task_name": "resnet56+mini_cifar10+0.3",
+  "task_name": "vgg16+cifar100+0.3",
   "task_info": {
     "class_num": 10,
     "image_size": 32,
@@ -33,5 +33,5 @@
   },
   "pretrain_epochs": 50,
 
-  "automl_search_time(h)": 24
+  "automl_search_time(h)": 0.1
 }
