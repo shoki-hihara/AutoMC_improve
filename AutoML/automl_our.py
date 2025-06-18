@@ -18,79 +18,92 @@ from automc.ParetoModel import ParetoModel
 
 
 class AutoMLOur(object):
-	def __init__(self, config_path, task_name, task_info):
-		super(AutoMLOur, self).__init__()
-		with open(config_path,"r") as f:
-			config = json.load(f)
-		config['task_name'] = task_name
-		config['task_info'] = task_info
-
-		self.environment_setting(config)
-
-		self.space = SearchSpace
-		self.cstartegies = self.get_spacecomponents(self.space)
-		self.knowledge_path = "automc"
-		if not os.path.exists(self.knowledge_path + '/exp_infos_1.pkl'):
-			KnowledgeGeneration(self.space, self.cstartegies, self.knowledge_path, self.logger).main()
-		else:
-			self.logger.info("* KnowledgeGeneration already finished before")
-
-		self.k_model = KnowledgeModel(config, self.cstrategies_path, self.knowledge_path, self.logger).cuda()
-		cstrategy_embeddings = self.learn_embeddings()
-
-		self.task_info_norm_value = self.k_model.task_info_norm_value
-		task_array = self.get_task_array(config)
-
-		self.target_compression_rate = float(config["task_name"].split("+")[2])
-		self.p_model = ParetoModel(cstrategy_embeddings, task_array, self.target_compression_rate).cuda()
-
-		self.evaluator = SchemeEvaluationStep(config, self.logging_path, self.logger)
-
-		self.optimal_num = config["our_pmodel_optimal_num"]
-		self.update_frequency = config['our_pmodel_update_frequency']
-		self.batch_size = config['our_pmodel_batch_size']
-		self.avg_ratio = config['our_pmodel_avg_ratio']
-		self.update_batch_num = config['our_pmodel_update_batch_num']
-		self.optimizer = torch.optim.Adam(self.p_model.parameters(), lr=config["our_pmodel_learning_rate"])
-		self.loss = torch.nn.MSELoss()
-
-		task_info = self.get_real_taskinfo(config["task_info"])
-		next_cstrategies = [i for i in range(1, len(self.cstartegies)+1)]
-		self.history = [
-			{
-				"pre_sequences": [0],
-				"selected_next_cstrategy": [],
-				"valid_unselected_next_cstrategy": list(next_cstrategies),
-				"score_info": [task_info["top1_acc"], 0, 0, task_info["parameter_amount"], task_info["flops_amount"]], # [acc, compression_rate, flops_decreased_rate, parameter_amount, flops_amount]
-				"pre_info": [None,None,None,None,None], # [pre_model_dir, pre_parameter_remain_rate, pre_flops_remain_rate, pre_acc_top1_rate, pre_acc_top5_rate]
-				"source_index": 0, 
-				"pareto_score_value": [0,0], # [acc/left_compression_rate, flops_decreased_rate/left_compression_rate]
-				"finished_compression_rate": 0, # required: self.target_compression_rate * finished_compression_rate <= 0.85
-				"finished_finetune_rate": 0, # required: finished_finetune_rate <= 4.0
-				"valid": True
-			}
-		]
-		self.pareto_history = [
-			{
-				"source_index": 0,
-				"pareto_score_value": [0,0],
-			}
-		]
-		self.avg_pareto_history = [
-			{
-				"source_index": 0,
-				"avg_pareto_score_value": [0,0],
-			}
-		]
-		self.p_model_data = []
-
-		self.automl_search_time_s = float(config['automl_search_time(h)'])*60*60
-
-		self.codes = 0
-		self.valid_codes = 0
-		self.steps = 0
-		self.valid_steps = 0
-		return
+	    def __init__(self, config_path, task_name, task_info):
+	        super(AutoMLOur, self).__init__()
+	
+	        # --- logger 初期化ここから ---
+	        self.logger = logging.getLogger(__name__)
+	        self.logger.setLevel(logging.INFO)  # 必要に応じて DEBUG に変更も可
+	
+	        ch = logging.StreamHandler()
+	        ch.setLevel(logging.INFO)
+	        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+	        ch.setFormatter(formatter)
+	
+	        if not self.logger.hasHandlers():
+	            self.logger.addHandler(ch)
+	        # --- logger 初期化ここまで ---
+	
+	        with open(config_path,"r") as f:
+	            config = json.load(f)
+	        config['task_name'] = task_name
+	        config['task_info'] = task_info
+	
+	        self.environment_setting(config)
+	
+	        self.space = SearchSpace
+	        self.cstartegies = self.get_spacecomponents(self.space)
+	        self.knowledge_path = "automc"
+	        if not os.path.exists(self.knowledge_path + '/exp_infos_1.pkl'):
+	            KnowledgeGeneration(self.space, self.cstartegies, self.knowledge_path, self.logger).main()
+	        else:
+	            self.logger.info("* KnowledgeGeneration already finished before")
+	
+	        self.k_model = KnowledgeModel(config, self.cstrategies_path, self.knowledge_path, self.logger).cuda()
+	        cstrategy_embeddings = self.learn_embeddings()
+	
+	        self.task_info_norm_value = self.k_model.task_info_norm_value
+	        task_array = self.get_task_array(config)
+	
+	        self.target_compression_rate = float(config["task_name"].split("+")[2])
+	        self.p_model = ParetoModel(cstrategy_embeddings, task_array, self.target_compression_rate).cuda()
+	
+	        self.evaluator = SchemeEvaluationStep(config, self.logging_path, self.logger)
+	
+	        self.optimal_num = config["our_pmodel_optimal_num"]
+	        self.update_frequency = config['our_pmodel_update_frequency']
+	        self.batch_size = config['our_pmodel_batch_size']
+	        self.avg_ratio = config['our_pmodel_avg_ratio']
+	        self.update_batch_num = config['our_pmodel_update_batch_num']
+	        self.optimizer = torch.optim.Adam(self.p_model.parameters(), lr=config["our_pmodel_learning_rate"])
+	        self.loss = torch.nn.MSELoss()
+	
+	        task_info = self.get_real_taskinfo(config["task_info"])
+	        next_cstrategies = [i for i in range(1, len(self.cstartegies)+1)]
+	        self.history = [
+	            {
+	                "pre_sequences": [0],
+	                "selected_next_cstrategy": [],
+	                "valid_unselected_next_cstrategy": list(next_cstrategies),
+	                "score_info": [task_info["top1_acc"], 0, 0, task_info["parameter_amount"], task_info["flops_amount"]],
+	                "pre_info": [None,None,None,None,None],
+	                "source_index": 0,
+	                "pareto_score_value": [0,0],
+	                "finished_compression_rate": 0,
+	                "finished_finetune_rate": 0,
+	                "valid": True
+	            }
+	        ]
+	        self.pareto_history = [
+	            {
+	                "source_index": 0,
+	                "pareto_score_value": [0,0],
+	            }
+	        ]
+	        self.avg_pareto_history = [
+	            {
+	                "source_index": 0,
+	                "avg_pareto_score_value": [0,0],
+	            }
+	        ]
+	        self.p_model_data = []
+	
+	        self.automl_search_time_s = float(config['automl_search_time(h)'])*60*60
+	
+	        self.codes = 0
+	        self.valid_codes = 0
+	        self.steps = 0
+	        self.valid_steps = 0
 
 	def create_exp_dir(self, path, scripts_to_save=None):
 		if not os.path.exists(path):
